@@ -1,7 +1,26 @@
 version: '3.8'
 
 services:
-  # Plans Service Database
+  # =====================================================
+  # DATABASE SERVICES
+  # =====================================================
+  
+  # IAM Service Database (PostgreSQL)
+  iam-db:
+    image: postgres:15
+    container_name: ecomovil-iam-db
+    environment:
+      POSTGRES_DB: ecomovil_iam_db
+      POSTGRES_USER: iam_user
+      POSTGRES_PASSWORD: iam_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - iam_data:/var/lib/postgresql/data
+    networks:
+      - ecomovil-network
+
+  # Plans Service Database (MySQL)
   plans-db:
     image: mysql:8.0
     container_name: ecomovil-plans-db
@@ -17,7 +36,7 @@ services:
     networks:
       - ecomovil-network
 
-  # Users Service Database  
+  # Users Service Database (MySQL)
   users-db:
     image: mysql:8.0
     container_name: ecomovil-users-db
@@ -33,77 +52,43 @@ services:
     networks:
       - ecomovil-network
 
-  # Vehicles Service Database
-  vehicles-db:
-    image: mysql:8.0
-    container_name: ecomovil-vehicles-db
-    environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: ecomovil_vehicles_db
-      MYSQL_USER: vehicles_user
-      MYSQL_PASSWORD: vehicles_password
-    ports:
-      - "3308:3306"
-    volumes:
-      - vehicles_data:/var/lib/mysql
-    networks:
-      - ecomovil-network
+  # =====================================================
+  # MICROSERVICES
+  # =====================================================
 
-  # Reservations Service Database
-  reservations-db:
-    image: mysql:8.0
-    container_name: ecomovil-reservations-db
+  # IAM Service
+  iam-service:
+    build: 
+      context: ./iam
+      dockerfile: Dockerfile
+    container_name: ecomovil-iam-service
     environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: ecomovil_reservations_db
-      MYSQL_USER: reservations_user
-      MYSQL_PASSWORD: reservations_password
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://iam-db:5432/ecomovil_iam_db
+      SPRING_DATASOURCE_USERNAME: iam_user
+      SPRING_DATASOURCE_PASSWORD: iam_password
+      SERVER_PORT: 8080
+      JWT_SECRET: mySecretKey
     ports:
-      - "3309:3306"
-    volumes:
-      - reservations_data:/var/lib/mysql
-    networks:
-      - ecomovil-network
-
-  # IAM Service Database (PostgreSQL for security)
-  iam-db:
-    image: postgres:15
-    container_name: ecomovil-iam-db
-    environment:
-      POSTGRES_DB: ecomovil_iam_db
-      POSTGRES_USER: iam_user
-      POSTGRES_PASSWORD: iam_password
-    ports:
-      - "5433:5432"
-    volumes:
-      - iam_data:/var/lib/postgresql/data
-    networks:
-      - ecomovil-network
-
-  # Forum Service Database (MongoDB)
-  forum-db:
-    image: mongo:7.0
-    container_name: ecomovil-forum-db
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: forum_admin
-      MONGO_INITDB_ROOT_PASSWORD: forum_password
-      MONGO_INITDB_DATABASE: ecomovil_forum_db
-    ports:
-      - "27017:27017"
-    volumes:
-      - forum_data:/data/db
+      - "8080:8080"
+    depends_on:
+      - iam-db
     networks:
       - ecomovil-network
 
   # Plans Service
   plans-service:
-    build: ./plans/untitled
+    build: 
+      context: ./plans/untitled
+      dockerfile: Dockerfile
     container_name: ecomovil-plans-service
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://plans-db:3306/ecomovil_plans_db
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:mysql://plans-db:3306/ecomovil_plans_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       SPRING_DATASOURCE_USERNAME: plans_user
       SPRING_DATASOURCE_PASSWORD: plans_password
       SERVER_PORT: 8081
+      JWT_SECRET: mySecretKey
     ports:
       - "8081:8081"
     depends_on:
@@ -111,38 +96,35 @@ services:
     networks:
       - ecomovil-network
 
-  # Redis for caching and session management
-  redis:
-    image: redis:7.2-alpine
-    container_name: ecomovil-redis
-    ports:
-      - "6379:6379"
-    networks:
-      - ecomovil-network
-
-  # LocalStack for AWS services simulation (SNS, SQS, etc.)
-  localstack:
-    image: localstack/localstack:3
-    container_name: ecomovil-localstack
+  # Users Service
+  users-service:
+    build: 
+      context: ./users
+      dockerfile: Dockerfile
+    container_name: ecomovil-users-service
     environment:
-      SERVICES: sns,sqs,s3
-      DEBUG: 1
-      DATA_DIR: /tmp/localstack/data
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:mysql://users-db:3306/ecomovil_users_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: users_user
+      SPRING_DATASOURCE_PASSWORD: users_password
+      SERVER_PORT: 8082
+      JWT_SECRET: mySecretKey
+      SERVICES_PLANS_URL: http://plans-service:8081
     ports:
-      - "4566:4566"
-    volumes:
-      - localstack_data:/tmp/localstack
+      - "8082:8082"
+    depends_on:
+      - users-db
+      - plans-service
     networks:
       - ecomovil-network
 
 volumes:
-  plans_data:
-  users_data:
-  vehicles_data:
-  reservations_data:
   iam_data:
-  forum_data:
-  localstack_data:
+    driver: local
+  plans_data:
+    driver: local
+  users_data:
+    driver: local
 
 networks:
   ecomovil-network:

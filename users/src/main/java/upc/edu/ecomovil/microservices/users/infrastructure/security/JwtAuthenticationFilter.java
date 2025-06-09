@@ -38,43 +38,54 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
             FilterChain filterChain) throws ServletException, IOException {
 
+        logger.debug("Processing request for URL: {}", request.getRequestURL());
+        logger.debug("Authorization header: {}", request.getHeader("Authorization"));
+
         try {
             String jwt = parseJwt(request);
+            logger.debug("Extracted JWT token: {}", jwt != null ? jwt.substring(0, Math.min(jwt.length(), 20)) + "..." : "null");
 
-            if (jwt != null && jwtUtils.validateToken(jwt)) {
-                String username = jwtUtils.getUsernameFromToken(jwt);
-                Long userId = jwtUtils.getUserIdFromToken(jwt);
-                List<String> roles = jwtUtils.getRolesFromToken(jwt);
+            if (jwt != null) {
+                boolean isValid = jwtUtils.validateToken(jwt);
+                logger.debug("Token validation result: {}", isValid);
+                
+                if (isValid) {
+                    String username = jwtUtils.getUsernameFromToken(jwt);
+                    Long userId = jwtUtils.getUserIdFromToken(jwt);
+                    List<String> roles = jwtUtils.getRolesFromToken(jwt);
 
-                logger.info("JWT Token validated successfully for user: {}, userId: {}, roles: {}", username, userId,
-                        roles);
+                    logger.info("JWT Token validated successfully for user: {}, userId: {}, roles: {}", username, userId,
+                            roles);
 
-                // Convert roles to Spring Security authorities (handle null roles)
-                List<SimpleGrantedAuthority> authorities = (roles != null)
-                        ? roles.stream()
-                                .map(SimpleGrantedAuthority::new)
-                                .collect(Collectors.toList())
-                        : List.of(); // Empty list if no roles
+                    // Convert roles to Spring Security authorities (handle null roles)
+                    List<SimpleGrantedAuthority> authorities = (roles != null)
+                            ? roles.stream()
+                                    .map(SimpleGrantedAuthority::new)
+                                    .collect(Collectors.toList())
+                            : List.of(); // Empty list if no roles
 
-                logger.info("Converted authorities: {}", authorities);
+                    logger.info("Converted authorities: {}", authorities);
 
-                // Create UserDetails object for @AuthenticationPrincipal with userId
-                JwtUserDetails userDetails = new JwtUserDetails(username, userId, authorities);
+                    // Create UserDetails object for @AuthenticationPrincipal with userId
+                    JwtUserDetails userDetails = new JwtUserDetails(username, userId, authorities);
 
-                // Create authentication token with UserDetails as principal
-                UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                        userDetails, null, authorities);
-                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                    // Create authentication token with UserDetails as principal
+                    UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                            userDetails, null, authorities);
+                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
-                // Set authentication in Security Context
-                SecurityContextHolder.getContext().setAuthentication(authentication);
+                    // Set authentication in Security Context
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
 
-                logger.debug("Authentication set for user: {}", username);
+                    logger.debug("Authentication set for user: {}", username);
+                } else {
+                    logger.warn("Token is invalid");
+                }
             } else {
-                logger.debug("Token is not valid or not present");
+                logger.debug("No JWT token found in request");
             }
         } catch (Exception e) {
-            logger.error("Cannot set user authentication: {}", e.getMessage());
+            logger.error("Cannot set user authentication: {}", e.getMessage(), e);
         }
 
         filterChain.doFilter(request, response);

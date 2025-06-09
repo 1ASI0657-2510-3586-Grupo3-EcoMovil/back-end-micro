@@ -2,6 +2,8 @@ package upc.edu.ecomovil.microservices.users.infrastructure.security;
 
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -17,6 +19,8 @@ import java.util.function.Function;
  */
 @Component
 public class JwtUtils {
+
+    private static final Logger logger = LoggerFactory.getLogger(JwtUtils.class);
 
     @Value("${authorization.jwt.secret}")
     private String secret;
@@ -60,9 +64,29 @@ public class JwtUtils {
      */
     public boolean validateToken(String token) {
         try {
+            logger.debug("Validating JWT token with secret length: {}", secret.length());
+            logger.debug("Token to validate: {}", token.substring(0, Math.min(token.length(), 20)) + "...");
+            
             Jwts.parser().verifyWith(getSigningKey()).build().parseSignedClaims(token);
+            logger.debug("Token validation successful");
             return true;
-        } catch (JwtException | IllegalArgumentException e) {
+        } catch (ExpiredJwtException e) {
+            logger.warn("JWT token is expired: {}", e.getMessage());
+            return false;
+        } catch (UnsupportedJwtException e) {
+            logger.warn("JWT token is unsupported: {}", e.getMessage());
+            return false;
+        } catch (MalformedJwtException e) {
+            logger.warn("JWT token is malformed: {}", e.getMessage());
+            return false;
+        } catch (SignatureException e) {
+            logger.warn("JWT signature validation failed: {}", e.getMessage());
+            return false;
+        } catch (IllegalArgumentException e) {
+            logger.warn("JWT token compact of handler are invalid: {}", e.getMessage());
+            return false;
+        } catch (Exception e) {
+            logger.error("JWT token validation failed with unexpected error: {}", e.getMessage(), e);
             return false;
         }
     }
