@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # =====================================================
   # DATABASE SERVICES
@@ -68,13 +66,14 @@ services:
       SPRING_DATASOURCE_USERNAME: iam_user
       SPRING_DATASOURCE_PASSWORD: iam_password
       SERVER_PORT: 8080
-      JWT_SECRET: mySecretKey
+      AUTHORIZATION_JWT_SECRET: mySecretKeyThatIsLongEnoughForJWTHMACAlgorithmRequirements1234567890
     ports:
       - "8080:8080"
     depends_on:
       - iam-db
     networks:
       - ecomovil-network
+    restart: unless-stopped
 
   # Plans Service
   plans-service:
@@ -88,13 +87,14 @@ services:
       SPRING_DATASOURCE_USERNAME: plans_user
       SPRING_DATASOURCE_PASSWORD: plans_password
       SERVER_PORT: 8081
-      JWT_SECRET: mySecretKey
+      AUTHORIZATION_JWT_SECRET: mySecretKeyThatIsLongEnoughForJWTHMACAlgorithmRequirements1234567890
     ports:
       - "8081:8081"
     depends_on:
       - plans-db
     networks:
       - ecomovil-network
+    restart: unless-stopped
 
   # Users Service
   users-service:
@@ -108,7 +108,7 @@ services:
       SPRING_DATASOURCE_USERNAME: users_user
       SPRING_DATASOURCE_PASSWORD: users_password
       SERVER_PORT: 8082
-      JWT_SECRET: mySecretKey
+      AUTHORIZATION_JWT_SECRET: mySecretKeyThatIsLongEnoughForJWTHMACAlgorithmRequirements1234567890
       SERVICES_PLANS_URL: http://plans-service:8081
     ports:
       - "8082:8082"
@@ -117,6 +117,7 @@ services:
       - plans-service
     networks:
       - ecomovil-network
+    restart: unless-stopped
 
 volumes:
   iam_data:
