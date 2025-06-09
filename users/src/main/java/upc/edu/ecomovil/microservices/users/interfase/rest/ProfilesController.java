@@ -49,20 +49,34 @@ public class ProfilesController {
     @PostMapping
     public ResponseEntity<ProfileResource> createProfile(@RequestBody CreateProfileResource resource,
             @AuthenticationPrincipal UserDetails userDetails) {
-        String username = userDetails.getUsername();
-        log.info("Authenticated as: {}", username);
+        try {
+            String username = userDetails.getUsername();
+            log.info("Authenticated as: {}", username);
 
-        // Extract userId from JWT token via JwtUserDetails
-        Long userId = ((JwtUserDetails) userDetails).getUserId();
+            // Extract userId from JWT token via JwtUserDetails
+            Long userId = ((JwtUserDetails) userDetails).getUserId();
 
-        var createProfileCommand = CreateProfileCommandFromResourceAssembler.toCommandFromResource(resource, userId);
-        var profile = profileCommandService.handle(createProfileCommand);
+            log.info("Creating profile for userId: {} with planId: {}", userId, resource.planId());
 
-        if (profile.isEmpty())
+            var createProfileCommand = CreateProfileCommandFromResourceAssembler.toCommandFromResource(resource, userId);
+            var profile = profileCommandService.handle(createProfileCommand);
+
+            if (profile.isEmpty()) {
+                log.warn("Profile creation failed - service returned empty");
+                return ResponseEntity.badRequest().build();
+            }
+
+            var profileResource = ProfileResourceFromEntityAssembler.toResourceFromEntity(profile.get());
+            log.info("Profile created successfully with ID: {}", profile.get().getId());
+            return new ResponseEntity<>(profileResource, HttpStatus.CREATED);
+            
+        } catch (IllegalArgumentException e) {
+            log.error("Profile creation failed due to validation error: {}", e.getMessage());
             return ResponseEntity.badRequest().build();
-
-        var profileResource = ProfileResourceFromEntityAssembler.toResourceFromEntity(profile.get());
-        return new ResponseEntity<>(profileResource, HttpStatus.CREATED);
+        } catch (Exception e) {
+            log.error("Unexpected error during profile creation: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError().build();
+        }
     }
 
     @Operation(summary = "Get a profile by ID", description = "Gets a profile by the provided ID")
