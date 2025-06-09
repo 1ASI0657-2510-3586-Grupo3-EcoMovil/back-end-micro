@@ -58,7 +58,8 @@ public class ProfilesController {
 
             log.info("Creating profile for userId: {} with planId: {}", userId, resource.planId());
 
-            var createProfileCommand = CreateProfileCommandFromResourceAssembler.toCommandFromResource(resource, userId);
+            var createProfileCommand = CreateProfileCommandFromResourceAssembler.toCommandFromResource(resource,
+                    userId);
             var profile = profileCommandService.handle(createProfileCommand);
 
             if (profile.isEmpty()) {
@@ -69,7 +70,7 @@ public class ProfilesController {
             var profileResource = ProfileResourceFromEntityAssembler.toResourceFromEntity(profile.get());
             log.info("Profile created successfully with ID: {}", profile.get().getId());
             return new ResponseEntity<>(profileResource, HttpStatus.CREATED);
-            
+
         } catch (IllegalArgumentException e) {
             log.error("Profile creation failed due to validation error: {}", e.getMessage());
             return ResponseEntity.badRequest().build();

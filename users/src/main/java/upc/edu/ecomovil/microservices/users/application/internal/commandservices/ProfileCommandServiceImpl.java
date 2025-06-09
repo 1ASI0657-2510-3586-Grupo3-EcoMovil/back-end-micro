@@ -16,7 +16,7 @@ import java.util.Optional;
 @Service
 public class ProfileCommandServiceImpl implements ProfileCommandService {
     private static final Logger logger = LoggerFactory.getLogger(ProfileCommandServiceImpl.class);
-    
+
     private final ProfileRepository profileRepository;
     private final ExternalPlanService externalPlanService;
 
@@ -28,7 +28,7 @@ public class ProfileCommandServiceImpl implements ProfileCommandService {
     @Override
     public Optional<Profile> handle(CreateProfileCommand command) {
         logger.info("Creating profile for userId: {} with planId: {}", command.userId(), command.planId());
-        
+
         var ruc = new RucNumber(command.rucNumber());
         profileRepository.findByRuc(ruc).ifPresent(
                 profile -> {
