@@ -43,18 +43,20 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         try {
             String jwt = parseJwt(request);
-            logger.debug("Extracted JWT token: {}", jwt != null ? jwt.substring(0, Math.min(jwt.length(), 20)) + "..." : "null");
+            logger.debug("Extracted JWT token: {}",
+                    jwt != null ? jwt.substring(0, Math.min(jwt.length(), 20)) + "..." : "null");
 
             if (jwt != null) {
                 boolean isValid = jwtUtils.validateToken(jwt);
                 logger.debug("Token validation result: {}", isValid);
-                
+
                 if (isValid) {
                     String username = jwtUtils.getUsernameFromToken(jwt);
                     Long userId = jwtUtils.getUserIdFromToken(jwt);
                     List<String> roles = jwtUtils.getRolesFromToken(jwt);
 
-                    logger.info("JWT Token validated successfully for user: {}, userId: {}, roles: {}", username, userId,
+                    logger.info("JWT Token validated successfully for user: {}, userId: {}, roles: {}", username,
+                            userId,
                             roles);
 
                     // Convert roles to Spring Security authorities (handle null roles)

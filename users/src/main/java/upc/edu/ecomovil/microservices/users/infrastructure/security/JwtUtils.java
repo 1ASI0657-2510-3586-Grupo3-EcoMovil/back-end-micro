@@ -66,7 +66,7 @@ public class JwtUtils {
         try {
             logger.debug("Validating JWT token with secret length: {}", secret.length());
             logger.debug("Token to validate: {}", token.substring(0, Math.min(token.length(), 20)) + "...");
-            
+
             Jwts.parser().verifyWith(getSigningKey()).build().parseSignedClaims(token);
             logger.debug("Token validation successful");
             return true;

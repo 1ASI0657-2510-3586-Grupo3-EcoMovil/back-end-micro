@@ -29,14 +29,14 @@ public class ExternalPlanService {
 
     public Optional<PlanDto> fetchPlanById(Long id) {
         logger.info("Fetching plan with ID: {} from URL: {}", id, plansServiceUrl);
-        
+
         try {
             String url = plansServiceUrl + "/api/v1/plans/id/" + id;
             logger.debug("Making HTTP GET request to: {}", url);
 
             // Get JWT token from current HTTP request
             String authToken = getCurrentJwtToken();
-            
+
             HttpHeaders headers = new HttpHeaders();
             if (authToken != null) {
                 headers.set("Authorization", "Bearer " + authToken);
@@ -48,7 +48,7 @@ public class ExternalPlanService {
             HttpEntity<String> entity = new HttpEntity<>(headers);
             ResponseEntity<PlanDto> response = restTemplate.exchange(url, HttpMethod.GET, entity, PlanDto.class);
             PlanDto plan = response.getBody();
-            
+
             if (plan != null) {
                 logger.info("Successfully fetched plan with ID: {} - Name: {}", id, plan.getName());
                 return Optional.of(plan);
@@ -68,10 +68,11 @@ public class ExternalPlanService {
      */
     private String getCurrentJwtToken() {
         try {
-            ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.currentRequestAttributes();
+            ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder
+                    .currentRequestAttributes();
             HttpServletRequest request = attributes.getRequest();
             String authHeader = request.getHeader("Authorization");
-            
+
             if (authHeader != null && authHeader.startsWith("Bearer ")) {
                 return authHeader.substring(7); // Remove "Bearer " prefix
             }
