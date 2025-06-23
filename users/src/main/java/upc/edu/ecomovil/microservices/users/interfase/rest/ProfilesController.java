@@ -18,6 +18,7 @@ import org.springframework.http.HttpStatus;
 import upc.edu.ecomovil.microservices.users.domain.model.aggregates.Profile;
 import upc.edu.ecomovil.microservices.users.domain.model.queries.GetAllProfilesQuery;
 import upc.edu.ecomovil.microservices.users.domain.model.queries.GetProfileByIdQuery;
+import upc.edu.ecomovil.microservices.users.domain.model.queries.GetProfileByUserIdQuery;
 import upc.edu.ecomovil.microservices.users.domain.model.queries.GetProfilesByPlanIdQuery;
 import upc.edu.ecomovil.microservices.users.domain.services.ProfileCommandService;
 import upc.edu.ecomovil.microservices.users.domain.services.ProfileQueryService;
@@ -106,6 +107,17 @@ public class ProfilesController {
     public ResponseEntity<ProfileResource> getProfile(@PathVariable Long profileId) {
         var getProfileByIdQuery = new GetProfileByIdQuery(profileId);
         var profile = profileQueryService.handle(getProfileByIdQuery);
+        if (profile.isEmpty())
+            return ResponseEntity.notFound().build();
+
+        var profileResource = ProfileResourceFromEntityAssembler.toResourceFromEntity(profile.get());
+        return ResponseEntity.ok(profileResource);
+    }
+
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<ProfileResource> getProfileByUserId(@PathVariable Long userId) {
+        var getProfileByUserIdQuery = new GetProfileByUserIdQuery(userId);
+        var profile = profileQueryService.handle(getProfileByUserIdQuery);
         if (profile.isEmpty())
             return ResponseEntity.notFound().build();
 

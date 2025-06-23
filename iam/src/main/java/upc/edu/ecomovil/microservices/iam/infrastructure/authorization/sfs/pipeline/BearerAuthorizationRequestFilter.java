@@ -49,6 +49,7 @@ public class BearerAuthorizationRequestFilter extends OncePerRequestFilter {
     protected void doFilterInternal(@NonNull HttpServletRequest request,
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain) throws ServletException, IOException {
+
         try {
             String token = tokenService.getBearerTokenFrom(request);
             LOGGER.debug("Token extracted: {}", token != null ? "present" : "absent");

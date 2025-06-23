@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:      test: ["CMD", "curl", "-f", "http://localhost:8083/actuator/health"]  vehicles-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vehicles-service
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:mysql://vehicles-db:3306/ecomovil_vehicles_db
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: password
+      USERS_SERVICE_BASE_URL: http://users-service:8081
+      IAM_SERVICE_BASE_URL: http://iam-service:8080
+      JWT_SECRET: mySecretKeyThatIsLongEnoughForJWTHMACAlgorithmRequirements1234567890
+    depends_on:
+      vehicles-db:
+        condition: service_healthy
+    networks:
+      - ecomovil-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  vehicles-db:
+    image: mysql:8.0
+    container_name: vehicles-db
+    ports:
+      - "3308:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: ecomovil_vehicles_db
+      MYSQL_USER: vehicles_user
+      MYSQL_PASSWORD: vehicles_password
+    volumes:
+      - vehicles_db_data:/var/lib/mysql
+      - ../init-scripts/init-vehicles-db.sql:/docker-entrypoint-initdb.d/init-vehicles-db.sql
+    networks:
+      - ecomovil-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-ppassword"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  vehicles_db_data:
+    driver: local
+
+networks:
+  ecomovil-network:
+    external: true
