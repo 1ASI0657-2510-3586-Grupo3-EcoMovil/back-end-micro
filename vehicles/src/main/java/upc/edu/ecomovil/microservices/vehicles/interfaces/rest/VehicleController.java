@@ -114,14 +114,14 @@ public class VehicleController {
     @GetMapping
     public ResponseEntity<List<VehicleResource>> getAllVehicles() {
         log.info("Getting all vehicles");
-        
+
         var getAllVehiclesQuery = new GetAllVehiclesQuery();
         var vehicles = vehicleQueryService.handle(getAllVehiclesQuery);
-        
+
         var vehicleResources = vehicles.stream()
                 .map(VehicleResourceFromEntityAssembler::toResourceFromEntity)
                 .collect(Collectors.toList());
-        
+
         log.info("Found {} vehicles", vehicleResources.size());
         return ResponseEntity.ok(vehicleResources);
     }
@@ -397,5 +397,29 @@ public class VehicleController {
             return ResponseEntity.internalServerError()
                     .body("❌ Users Service Integration Failed: " + e.getMessage());
         }
+    }
+
+    /**
+     * Get a specific vehicle by ID - public endpoint for reservations
+     * Any authenticated user can access this to view vehicle details for
+     * reservations
+     */
+    @Operation(summary = "Get vehicle for reservation", description = "Gets vehicle information for reservation purposes")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Vehicle found"),
+            @ApiResponse(responseCode = "404", description = "Vehicle not found"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized")
+    })
+    @GetMapping("/public/{vehicleId}")
+    public ResponseEntity<VehicleResource> getVehicleForReservation(@PathVariable Long vehicleId) {
+        var getVehicleByIdQuery = new GetVehicleByIdQuery(vehicleId);
+        var vehicle = vehicleQueryService.handle(getVehicleByIdQuery);
+
+        if (vehicle.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        var vehicleResource = VehicleResourceFromEntityAssembler.toResourceFromEntity(vehicle.get());
+        return ResponseEntity.ok(vehicleResource);
     }
 }

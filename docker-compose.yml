@@ -68,6 +68,22 @@ services:
     networks:
       - ecomovil-network
 
+  # Reservations Service Database (MySQL)
+  reservations-db:
+    image: mysql:8.0
+    container_name: ecomovil-reservations-db
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: ecomovil_reservations_db
+      MYSQL_USER: reservations_user
+      MYSQL_PASSWORD: reservations_password
+    ports:
+      - "3309:3306"
+    volumes:
+      - reservations_data:/var/lib/mysql
+    networks:
+      - ecomovil-network
+
   # =====================================================
   # MICROSERVICES
   # =====================================================
@@ -156,6 +172,30 @@ services:
     networks:
       - ecomovil-network
 
+  # Reservations Service
+  reservations-service:
+    build: 
+      context: ./reservations
+      dockerfile: Dockerfile
+    container_name: ecomovil-reservations-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:mysql://reservations-db:3306/ecomovil_reservations_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: reservations_user
+      SPRING_DATASOURCE_PASSWORD: reservations_password
+      SERVER_PORT: 8084
+      JWT_SECRET: mySecretKeyThatIsLongEnoughForJWTHMACAlgorithmRequirements1234567890
+      SERVICES_USERS_URL: http://users-service:8082
+      SERVICES_VEHICLES_URL: http://vehicles-service:8083
+    ports:
+      - "8084:8084"
+    depends_on:
+      - reservations-db
+      - users-service
+      - vehicles-service
+    networks:
+      - ecomovil-network
+
 volumes:
   iam_data:
     driver: local
@@ -164,6 +204,8 @@ volumes:
   users_data:
     driver: local
   vehicles_data:
+    driver: local
+  reservations_data:
     driver: local
 
 networks:
