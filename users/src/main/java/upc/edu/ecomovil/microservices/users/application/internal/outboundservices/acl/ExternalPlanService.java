@@ -1,6 +1,5 @@
 package upc.edu.ecomovil.microservices.users.application.internal.outboundservices.acl;
 
-import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -8,13 +7,8 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
-import upc.edu.ecomovil.microservices.users.infrastructure.security.JwtUserDetails;
 
 import java.util.Optional;
 
@@ -28,6 +22,8 @@ public class ExternalPlanService {
     private final RestTemplate restTemplate = new RestTemplate();
 
     public Optional<PlanDto> fetchPlanById(Long id) {
+        logger.error("=== ExternalPlanService.fetchPlanById called with ID: {} ===", id);
+        logger.error("Plans service URL configured as: {}", plansServiceUrl);
         logger.info("Fetching plan with ID: {} from URL: {}", id, plansServiceUrl);
 
         try {
@@ -35,17 +31,21 @@ public class ExternalPlanService {
             logger.debug("Making HTTP GET request to: {}", url);
 
             // Get JWT token from current HTTP request
-            String authToken = getCurrentJwtToken();
-
             HttpHeaders headers = new HttpHeaders();
+
+            // Try to get the token from the current web request context
+            String authToken = getCurrentJwtToken();
             if (authToken != null) {
                 headers.set("Authorization", "Bearer " + authToken);
-                logger.debug("Adding Authorization header with JWT token for service-to-service call");
+                logger.debug("Added Authorization header with JWT token");
             } else {
-                logger.warn("No JWT token found in current request - making unauthenticated call");
+                logger.warn("No JWT token found in current request context");
             }
 
+            // Create HTTP entity with headers
             HttpEntity<String> entity = new HttpEntity<>(headers);
+
+            // Make the request with authentication headers
             ResponseEntity<PlanDto> response = restTemplate.exchange(url, HttpMethod.GET, entity, PlanDto.class);
             PlanDto plan = response.getBody();
 
@@ -57,29 +57,11 @@ public class ExternalPlanService {
                 return Optional.empty();
             }
         } catch (Exception e) {
+            // Return empty if plan is not found or service is unavailable
             logger.error("Error fetching plan with ID {}: {}", id, e.getMessage());
             logger.debug("Full exception stack trace:", e);
-            throw new IllegalArgumentException("El plan con el ID " + id + " no existe");
+            return Optional.empty();
         }
-    }
-
-    /**
-     * Extract JWT token from current HTTP request
-     */
-    private String getCurrentJwtToken() {
-        try {
-            ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder
-                    .currentRequestAttributes();
-            HttpServletRequest request = attributes.getRequest();
-            String authHeader = request.getHeader("Authorization");
-
-            if (authHeader != null && authHeader.startsWith("Bearer ")) {
-                return authHeader.substring(7); // Remove "Bearer " prefix
-            }
-        } catch (Exception e) {
-            logger.debug("Could not extract JWT token from request: {}", e.getMessage());
-        }
-        return null;
     }
 
     // DTO for Plan data from Plans microservice
@@ -123,5 +105,29 @@ public class ExternalPlanService {
         public void setDescription(String description) {
             this.description = description;
         }
+    }
+
+    /**
+     * Get the current JWT token from the web request context
+     */
+    private String getCurrentJwtToken() {
+        try {
+            // Get the current HTTP request from RequestContextHolder
+            org.springframework.web.context.request.RequestAttributes requestAttributes = org.springframework.web.context.request.RequestContextHolder
+                    .currentRequestAttributes();
+
+            if (requestAttributes instanceof org.springframework.web.context.request.ServletRequestAttributes) {
+                jakarta.servlet.http.HttpServletRequest request = ((org.springframework.web.context.request.ServletRequestAttributes) requestAttributes)
+                        .getRequest();
+
+                String authHeader = request.getHeader("Authorization");
+                if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                    return authHeader.substring(7); // Remove "Bearer " prefix
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Could not extract JWT token from request context: {}", e.getMessage());
+        }
+        return null;
     }
 }

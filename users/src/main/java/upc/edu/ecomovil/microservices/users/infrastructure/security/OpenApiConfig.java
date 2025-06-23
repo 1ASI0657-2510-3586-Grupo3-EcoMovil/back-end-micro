@@ -15,6 +15,8 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class OpenApiConfig {
 
+        public static final String SECURITY_SCHEME_NAME = "bearerAuth";
+
         @Bean
         public OpenAPI customOpenAPI() {
                 return new OpenAPI()
@@ -22,13 +24,14 @@ public class OpenApiConfig {
                                                 .title("Users Microservice API")
                                                 .description("API for managing user profiles with JWT authentication")
                                                 .version("1.0.0"))
+                                .addSecurityItem(new SecurityRequirement()
+                                                .addList(SECURITY_SCHEME_NAME))
                                 .components(new Components()
-                                                .addSecuritySchemes("bearerAuth",
+                                                .addSecuritySchemes(SECURITY_SCHEME_NAME,
                                                                 new SecurityScheme()
                                                                                 .type(SecurityScheme.Type.HTTP)
                                                                                 .scheme("bearer")
                                                                                 .bearerFormat("JWT")
-                                                                                .description("JWT token for authentication")))
-                                .addSecurityItem(new SecurityRequirement().addList("bearerAuth"));
+                                                                                .description("Enter JWT Bearer token **_only_** (without 'Bearer ' prefix)")));
         }
 }
