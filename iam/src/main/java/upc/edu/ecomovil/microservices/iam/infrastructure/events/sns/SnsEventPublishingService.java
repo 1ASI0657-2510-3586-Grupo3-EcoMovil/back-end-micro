@@ -19,8 +19,11 @@ import java.util.Map;
  * This class implements the EventPublishingService interface and provides
  * event publishing functionality using AWS SNS.
  * </p>
+ * 
+ * TEMPORARILY DISABLED - Use NoOpEventPublishingService instead
  */
-@Service
+// @Service
+// @ConditionalOnProperty(name = "app.events.enabled", havingValue = "true")
 public class SnsEventPublishingService implements EventPublishingService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SnsEventPublishingService.class);
