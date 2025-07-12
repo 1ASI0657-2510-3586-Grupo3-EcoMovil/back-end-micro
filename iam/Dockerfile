@@ -1,5 +1,5 @@
 # Multi-stage build for IAM Service
-FROM --platform=linux/amd64 maven:3.9.8-eclipse-temurin-21 AS build
+FROM maven:3.9.8-eclipse-temurin-21 AS build
 
 # Set working directory
 WORKDIR /app
@@ -17,13 +17,23 @@ COPY src ./src
 RUN mvn clean package -DskipTests
 
 # Runtime stage
-FROM --platform=linux/amd64 eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:21-jre
+
+# Create app user for security
+RUN addgroup --system spring && adduser --system spring --ingroup spring
+
+# Install curl for health checks
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
 
 # Copy the built jar from build stage
 COPY --from=build /app/target/*.jar app.jar
+
+# Change ownership to spring user
+RUN chown -R spring:spring /app
+USER spring
 
 # Expose port
 EXPOSE 8080

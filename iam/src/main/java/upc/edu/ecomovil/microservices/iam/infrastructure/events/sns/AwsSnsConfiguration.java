@@ -16,8 +16,11 @@ import java.net.URI;
  * <p>
  * This class provides configuration for AWS SNS client and related beans.
  * </p>
+ * 
+ * TEMPORARILY DISABLED - SNS functionality commented out
  */
-@Configuration
+// @Configuration
+// @ConditionalOnProperty(name = "app.events.enabled", havingValue = "true")
 public class AwsSnsConfiguration {
 
     @Value("${aws.region}")
@@ -37,7 +40,7 @@ public class AwsSnsConfiguration {
      * 
      * @return the SNS client
      */
-    @Bean
+    // @Bean
     public SnsClient snsClient() {
         var credentialsProvider = StaticCredentialsProvider.create(
                 AwsBasicCredentials.create(accessKey, secretKey));
@@ -59,7 +62,7 @@ public class AwsSnsConfiguration {
      * 
      * @return the ObjectMapper
      */
-    @Bean
+    // @Bean
     public ObjectMapper objectMapper() {
         return new ObjectMapper();
     }
