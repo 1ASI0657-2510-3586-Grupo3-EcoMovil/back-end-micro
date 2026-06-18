@@ -1,0 +1,75 @@
+name: build-push-deploy
+
+on:
+  push:
+    branches: [main]
+
+env:
+  AWS_REGION: us-east-1
+  ECS_CLUSTER: ecomovil-cluster
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - dir: iam
+            ecr: ecomovil-iam
+            service: ecomovil-iam-svc
+          - dir: users
+            ecr: ecomovil-users
+            service: ecomovil-users-svc
+          - dir: plans/untitled
+            ecr: ecomovil-plans
+            service: ecomovil-plans-svc
+          - dir: vehicles
+            ecr: ecomovil-vehicles
+            service: ecomovil-vehicles-svc
+          - dir: reservations
+            ecr: ecomovil-reservations
+            service: ecomovil-reservations-svc
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 2 }
+
+      # ponytail: no paths-filter dependency, plain git diff decides whether to build
+      - id: changed
+        run: |
+          if git diff --quiet HEAD^ HEAD -- ${{ matrix.dir }}; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.changed.outputs.skip == 'false'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - if: steps.changed.outputs.skip == 'false'
+        id: account
+        run: echo "id=$(aws sts get-caller-identity --query Account --output text)" >> "$GITHUB_OUTPUT"
+
+      - if: steps.changed.outputs.skip == 'false'
+        run: aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ steps.account.outputs.id }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
+
+      - if: steps.changed.outputs.skip == 'false'
+        uses: docker/setup-buildx-action@v3
+
+      - if: steps.changed.outputs.skip == 'false'
+        run: |
+          docker buildx build --platform linux/arm64 \
+            -t ${{ steps.account.outputs.id }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ matrix.ecr }}:latest \
+            --push ${{ matrix.dir }}
+
+      # ponytail: task defs pin image as :latest, so force-new-deployment alone
+      # repulls. If a service isn't currently deployed (cost-saving teardown),
+      # this step just fails harmlessly — image is still pushed to ECR.
+      - if: steps.changed.outputs.skip == 'false'
+        run: |
+          aws ecs update-service --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ matrix.service }} --force-new-deployment \
+            --region ${{ env.AWS_REGION }} || echo "service not running, image pushed only"

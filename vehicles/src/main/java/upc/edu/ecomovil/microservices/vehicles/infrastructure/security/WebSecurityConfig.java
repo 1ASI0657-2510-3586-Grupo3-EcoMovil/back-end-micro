@@ -44,6 +44,7 @@ public class WebSecurityConfig {
                         .requestMatchers("/v3/api-docs/**").permitAll()
                         .requestMatchers("/swagger-resources/**").permitAll()
                         .requestMatchers("/webjars/**").permitAll()
+                        .requestMatchers("/api/v1/vehicles/chat").permitAll()
 
                         // Admin-only endpoints
                         .requestMatchers("/api/v1/vehicles/admin/**").hasRole("ADMIN")
