@@ -475,6 +475,26 @@ public class VehicleController {
     public record ChatResponse(String reply, List<ChatSuggestion> suggestions) {
     }
 
+    private static final java.util.regex.Pattern BUDGET_PATTERN = java.util.regex.Pattern.compile(
+            "s/\\.?\\s*(\\d+(?:\\.\\d+)?)|(\\d+(?:\\.\\d+)?)\\s*soles?", java.util.regex.Pattern.CASE_INSENSITIVE);
+
+    // ponytail: LLMs are unreliable at numeric filtering over a list in plain
+    // text, so the budget constraint is applied here, deterministically, the
+    // same way distance already is - the model only ever sees pre-filtered
+    // candidates, never the full catalog.
+    private static Double extractBudget(String text) {
+        var matcher = BUDGET_PATTERN.matcher(text);
+        Double last = null;
+        while (matcher.find()) {
+            String g = matcher.group(1) != null ? matcher.group(1) : matcher.group(2);
+            try {
+                last = Double.parseDouble(g);
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return last;
+    }
+
     /**
      * Sales chatbot - public endpoint, no auth required so visitors browsing
      * without an account can still get suggestions.
@@ -486,11 +506,19 @@ public class VehicleController {
                 .filter(v -> Boolean.TRUE.equals(v.getIsAvailable()))
                 .toList();
 
+        String pastMessages = request.history() == null ? ""
+                : request.history().stream().map(ChatHistoryTurn::text).reduce("", (a, b) -> a + " " + b);
+        Double budget = extractBudget(pastMessages + " " + request.message());
+
+        var withinBudget = budget == null ? available
+                : available.stream().filter(v -> v.getPriceSell() != null && v.getPriceSell() <= budget).toList();
+        var pool = withinBudget.isEmpty() ? available : withinBudget;
+
         boolean hasLocation = request.lat() != null && request.lng() != null;
-        var ranked = available.stream()
-                .sorted(hasLocation
-                        ? Comparator.comparingDouble(v -> distanceKm(request.lat(), request.lng(), v.getLat(), v.getLng()))
-                        : Comparator.comparing(v -> v.getPriceSell() == null ? Double.MAX_VALUE : v.getPriceSell()))
+        var ranked = pool.stream()
+                .sorted(budget != null || !hasLocation
+                        ? Comparator.comparing(v -> v.getPriceSell() == null ? Double.MAX_VALUE : v.getPriceSell())
+                        : Comparator.comparingDouble(v -> distanceKm(request.lat(), request.lng(), v.getLat(), v.getLng())))
                 .limit(3)
                 .toList();
 
