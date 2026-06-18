@@ -462,6 +462,11 @@ public class VehicleController {
         return ResponseEntity.ok(vehicleResource);
     }
 
+    @GetMapping("/ping")
+    public ResponseEntity<String> ping() {
+        return ResponseEntity.ok("pong-ci-cd-test-" + java.time.Instant.now());
+    }
+
     public record ChatHistoryTurn(String role, String text) {
     }
 
