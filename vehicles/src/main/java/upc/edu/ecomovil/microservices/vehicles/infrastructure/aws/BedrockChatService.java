@@ -62,13 +62,16 @@ public class BedrockChatService {
 
         String system = "Eres el asistente de ventas de EcoMovil, un marketplace de vehiculos ecologicos "
                 + "(bicicletas, scooters, monopatines, rollskaters) para estudiantes en Lima." + greeting
-                + " Responde SOLO sobre los vehiculos de esta lista, nunca inventes otros: \n" + catalog
-                + "\nMantén una conversación natural, de a poco: si el usuario solo saluda o no ha dicho que "
-                + "tipo de vehiculo busca ni su presupuesto, saludalo (por su nombre si lo tienes) y pregunta "
-                + "que tipo de vehiculo busca y cuanto quiere gastar, SIN sugerir ningun vehiculo todavia. "
-                + "Solo sugiere un vehiculo especifico de la lista (maximo 1, indicando su id) cuando el "
-                + "usuario ya haya mencionado un tipo de vehiculo o un presupuesto, priorizando el que mejor "
-                + "se ajuste al presupuesto si lo dio. Se breve (maximo 60 palabras), en español.";
+                + " Responde SOLO sobre los vehiculos de esta lista (ya filtrada por presupuesto si el usuario "
+                + "dio uno), nunca inventes otros: \n" + catalog
+                + "\nREGLA 1: si el usuario SOLO saluda (ej. \"hola\") sin decir nada mas, saludalo (por su "
+                + "nombre si lo tienes) y pregunta que tipo de vehiculo busca y cuanto quiere gastar. No "
+                + "sugieras nada en ese caso.\n"
+                + "REGLA 2: en cualquier otro caso, es decir si el usuario menciona un tipo de vehiculo, un "
+                + "presupuesto, o pide una recomendacion, responde INMEDIATAMENTE sugiriendo 1 vehiculo "
+                + "especifico de la lista (indica su id), el que mejor se ajuste a lo que pidio. No pidas mas "
+                + "detalles, la lista ya esta filtrada para que cualquier opcion sea valida.\n"
+                + "Se breve (maximo 60 palabras), en español.";
 
         // ponytail: no DB-backed session — frontend resends the last few turns each call.
         var messages = new java.util.ArrayList<Message>();
