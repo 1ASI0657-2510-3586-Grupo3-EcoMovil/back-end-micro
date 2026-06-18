@@ -462,7 +462,10 @@ public class VehicleController {
         return ResponseEntity.ok(vehicleResource);
     }
 
-    public record ChatRequest(String message, Float lat, Float lng) {
+    public record ChatHistoryTurn(String role, String text) {
+    }
+
+    public record ChatRequest(String message, Float lat, Float lng, String userName, List<ChatHistoryTurn> history) {
     }
 
     public record ChatSuggestion(Long id, String name, String type, Double priceSell, Double priceRent,
@@ -491,9 +494,18 @@ public class VehicleController {
                 .limit(3)
                 .toList();
 
-        String reply = bedrockChatService.chat(request.message(), ranked);
+        var history = request.history() == null ? null
+                : request.history().stream()
+                        .map(t -> new BedrockChatService.ChatTurn(t.role(), t.text()))
+                        .toList();
 
+        String reply = bedrockChatService.chat(request.message(), ranked, request.userName(), history);
+
+        // Only attach suggestion cards for vehicles the bot actually mentioned by
+        // id, so the UI doesn't show recommendations while the bot is still just
+        // asking clarifying questions.
         var suggestions = ranked.stream()
+                .filter(v -> reply.contains("id=" + v.getId()))
                 .map(v -> new ChatSuggestion(v.getId(), v.getName(), v.getType(), v.getPriceSell(), v.getPriceRent(),
                         v.getImageUrl(), hasLocation ? distanceKm(request.lat(), request.lng(), v.getLat(), v.getLng()) : null))
                 .toList();
