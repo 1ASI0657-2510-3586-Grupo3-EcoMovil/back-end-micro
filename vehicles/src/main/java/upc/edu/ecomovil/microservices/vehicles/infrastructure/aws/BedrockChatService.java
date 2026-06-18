@@ -48,25 +48,47 @@ public class BedrockChatService {
         this.guardrailVersion = version;
     }
 
-    public String chat(String userMessage, List<Vehicle> candidates) {
+    public record ChatTurn(String role, String text) {
+    }
+
+    public String chat(String userMessage, List<Vehicle> candidates, String userName, List<ChatTurn> history) {
         String catalog = candidates.isEmpty() ? "No hay vehiculos disponibles ahora."
                 : candidates.stream()
                         .map(v -> String.format("- id=%d, %s %s (%d), venta S/%.0f, renta S/%.0f/dia",
                                 v.getId(), v.getType(), v.getName(), v.getYear(), v.getPriceSell(), v.getPriceRent()))
                         .reduce("", (a, b) -> a + b + "\n");
 
+        String greeting = (userName == null || userName.isBlank()) ? "" : " El usuario se llama " + userName + ".";
+
         String system = "Eres el asistente de ventas de EcoMovil, un marketplace de vehiculos ecologicos "
-                + "(bicicletas, scooters, monopatines, rollskaters) para estudiantes en Lima. "
-                + "Responde SOLO sobre los vehiculos de esta lista, nunca inventes otros: \n" + catalog
-                + "\nSe breve (maximo 60 palabras), en español, y sugiere como maximo 1 vehiculo de la lista por id.";
+                + "(bicicletas, scooters, monopatines, rollskaters) para estudiantes en Lima." + greeting
+                + " Responde SOLO sobre los vehiculos de esta lista, nunca inventes otros: \n" + catalog
+                + "\nMantén una conversación natural, de a poco: si el usuario solo saluda o no ha dicho que "
+                + "tipo de vehiculo busca ni su presupuesto, saludalo (por su nombre si lo tienes) y pregunta "
+                + "que tipo de vehiculo busca y cuanto quiere gastar, SIN sugerir ningun vehiculo todavia. "
+                + "Solo sugiere un vehiculo especifico de la lista (maximo 1, indicando su id) cuando el "
+                + "usuario ya haya mencionado un tipo de vehiculo o un presupuesto, priorizando el que mejor "
+                + "se ajuste al presupuesto si lo dio. Se breve (maximo 60 palabras), en español.";
+
+        // ponytail: no DB-backed session — frontend resends the last few turns each call.
+        var messages = new java.util.ArrayList<Message>();
+        if (history != null) {
+            for (ChatTurn t : history) {
+                messages.add(Message.builder()
+                        .role("assistant".equals(t.role()) ? ConversationRole.ASSISTANT : ConversationRole.USER)
+                        .content(ContentBlock.builder().text(t.text()).build())
+                        .build());
+            }
+        }
+        messages.add(Message.builder()
+                .role(ConversationRole.USER)
+                .content(ContentBlock.builder().text(userMessage).build())
+                .build());
 
         var request = ConverseRequest.builder()
                 .modelId(MODEL_ID)
                 .system(SystemContentBlock.builder().text(system).build())
-                .messages(Message.builder()
-                        .role(ConversationRole.USER)
-                        .content(ContentBlock.builder().text(userMessage).build())
-                        .build())
+                .messages(messages)
                 .inferenceConfig(InferenceConfiguration.builder().maxTokens(200).temperature(0.4f).build());
 
         if (!guardrailId.isBlank()) {
