@@ -84,15 +84,14 @@
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
             <version>2.3.0</version>
         </dependency>
-        <!-- AWS S3 SDK -->
+        <!-- AWS SDK v2 modules - must share one version, mixing versions
+             across software.amazon.awssdk artifacts breaks at runtime with
+             NoClassDefFoundError (core/sdk-core classes diverge). -->
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>s3</artifactId>
-            <version>2.25.27</version>
+            <version>2.29.52</version>
         </dependency>
-        <!-- AWS Bedrock Runtime SDK (sales chatbot) - needs a version recent
-             enough to include the Converse API + Guardrails, unlike the s3
-             dependency's older 2.25.27 -->
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>bedrockruntime</artifactId>
