@@ -11,6 +11,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.http.MediaType;
 import org.springframework.http.HttpStatus;
 
@@ -29,7 +30,13 @@ import upc.edu.ecomovil.microservices.vehicles.interfaces.rest.transform.Vehicle
 import upc.edu.ecomovil.microservices.vehicles.infrastructure.security.JwtUserDetails;
 import upc.edu.ecomovil.microservices.vehicles.application.internal.outboundservices.acl.ExternalUserService;
 
+import upc.edu.ecomovil.microservices.vehicles.infrastructure.aws.S3Service;
+import upc.edu.ecomovil.microservices.vehicles.infrastructure.aws.BedrockChatService;
+
+import java.io.IOException;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -48,15 +55,21 @@ public class VehicleController {
     private final VehicleCommandService vehicleCommandService;
     private final VehicleRepository vehicleRepository;
     private final ExternalUserService externalUserService;
+    private final S3Service s3Service;
+    private final BedrockChatService bedrockChatService;
 
     public VehicleController(VehicleQueryService vehicleQueryService,
             VehicleCommandService vehicleCommandService,
             VehicleRepository vehicleRepository,
-            ExternalUserService externalUserService) {
+            ExternalUserService externalUserService,
+            S3Service s3Service,
+            BedrockChatService bedrockChatService) {
         this.vehicleQueryService = vehicleQueryService;
         this.vehicleCommandService = vehicleCommandService;
         this.vehicleRepository = vehicleRepository;
         this.externalUserService = externalUserService;
+        this.s3Service = s3Service;
+        this.bedrockChatService = bedrockChatService;
     }
 
     /**
@@ -400,6 +413,32 @@ public class VehicleController {
     }
 
     /**
+     * Upload a vehicle image to S3
+     */
+    @Operation(summary = "Upload vehicle image", description = "Uploads an image file to S3 and returns its URL")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Image uploaded successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid file"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized")
+    })
+    @PostMapping(value = "/upload-image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Map<String, String>> uploadImage(
+            @RequestParam("file") MultipartFile file,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        try {
+            if (file.isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "File is empty"));
+            }
+            String url = s3Service.uploadFile(file);
+            log.info("User {} uploaded vehicle image: {}", userDetails.getUsername(), url);
+            return ResponseEntity.ok(Map.of("url", url));
+        } catch (IOException e) {
+            log.error("Error uploading image: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError().body(Map.of("error", "Upload failed"));
+        }
+    }
+
+    /**
      * Get a specific vehicle by ID - public endpoint for reservations
      * Any authenticated user can access this to view vehicle details for
      * reservations
@@ -421,5 +460,56 @@ public class VehicleController {
 
         var vehicleResource = VehicleResourceFromEntityAssembler.toResourceFromEntity(vehicle.get());
         return ResponseEntity.ok(vehicleResource);
+    }
+
+    public record ChatRequest(String message, Float lat, Float lng) {
+    }
+
+    public record ChatSuggestion(Long id, String name, String type, Double priceSell, Double priceRent,
+            String imageUrl, Double distanceKm) {
+    }
+
+    public record ChatResponse(String reply, List<ChatSuggestion> suggestions) {
+    }
+
+    /**
+     * Sales chatbot - public endpoint, no auth required so visitors browsing
+     * without an account can still get suggestions.
+     */
+    @Operation(summary = "Chat with the sales bot", description = "Suggests nearby available vehicles via Bedrock")
+    @PostMapping("/chat")
+    public ResponseEntity<ChatResponse> chat(@RequestBody ChatRequest request) {
+        var available = vehicleRepository.findAll().stream()
+                .filter(v -> Boolean.TRUE.equals(v.getIsAvailable()))
+                .toList();
+
+        boolean hasLocation = request.lat() != null && request.lng() != null;
+        var ranked = available.stream()
+                .sorted(hasLocation
+                        ? Comparator.comparingDouble(v -> distanceKm(request.lat(), request.lng(), v.getLat(), v.getLng()))
+                        : Comparator.comparing(v -> v.getPriceSell() == null ? Double.MAX_VALUE : v.getPriceSell()))
+                .limit(3)
+                .toList();
+
+        String reply = bedrockChatService.chat(request.message(), ranked);
+
+        var suggestions = ranked.stream()
+                .map(v -> new ChatSuggestion(v.getId(), v.getName(), v.getType(), v.getPriceSell(), v.getPriceRent(),
+                        v.getImageUrl(), hasLocation ? distanceKm(request.lat(), request.lng(), v.getLat(), v.getLng()) : null))
+                .toList();
+
+        return ResponseEntity.ok(new ChatResponse(reply, suggestions));
+    }
+
+    // ponytail: small in-memory dataset, plain Haversine beats adding a
+    // geospatial query/library for a handful of vehicles.
+    private static double distanceKm(double lat1, double lng1, double lat2, double lng2) {
+        double r = 6371;
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLng = Math.toRadians(lng2 - lng1);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                        * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        return r * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 }
