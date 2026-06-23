@@ -19,6 +19,10 @@ public class VehicleResourceFromEntityAssembler {
                 entity.getImageUrl(),
                 entity.getLat(),
                 entity.getLng(),
-                entity.getDescription());
+                entity.getDescription(),
+                entity.getIotDeviceId(),
+                entity.getIsLocked(),
+                entity.getFallDetected(),
+                entity.getLastIotUpdate());
     }
 }

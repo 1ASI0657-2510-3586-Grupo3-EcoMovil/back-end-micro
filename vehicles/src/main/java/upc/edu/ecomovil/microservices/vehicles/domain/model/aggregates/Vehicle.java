@@ -9,6 +9,8 @@ import upc.edu.ecomovil.microservices.vehicles.domain.model.valueobjects.Prices;
 import upc.edu.ecomovil.microservices.vehicles.domain.model.valueobjects.Review;
 import upc.edu.ecomovil.microservices.vehicles.shared.domain.model.aggregates.AuditableAbstractAggregateRoot;
 
+import java.time.Instant;
+
 @Entity
 @Table(name = "vehicles")
 @Getter
@@ -41,6 +43,19 @@ public class Vehicle extends AuditableAbstractAggregateRoot<Vehicle> {
 
     @Column(name = "description", length = 1000)
     private String description;
+
+    // IoT fields — populated by the ESP32 via Lambda bridge
+    @Column(name = "iot_device_id")
+    private String iotDeviceId;
+
+    @Column(name = "is_locked")
+    private Boolean isLocked = false;
+
+    @Column(name = "fall_detected")
+    private Boolean fallDetected = false;
+
+    @Column(name = "last_iot_update")
+    private Instant lastIotUpdate;
 
     public Vehicle(String type, String name, Integer year, Integer review, Double priceRent, Double priceSell,
             Boolean isAvailable, String imageUrl, Float lat, Float lng, String description, Long ownerId) {
@@ -95,6 +110,23 @@ public class Vehicle extends AuditableAbstractAggregateRoot<Vehicle> {
 
     public void updateDescription(String description) {
         this.description = description;
+    }
+
+    public void updateIoTTelemetry(String iotDeviceId, Float lat, Float lng,
+                                   Boolean fallDetected, Boolean isLocked) {
+        this.iotDeviceId   = iotDeviceId;
+        if (lat != null && lng != null) {
+            this.lat = lat;
+            this.lng = lng;
+        }
+        this.fallDetected  = fallDetected;
+        this.isLocked      = isLocked;
+        this.lastIotUpdate = Instant.now();
+    }
+
+    public void setLocked(Boolean locked) {
+        this.isLocked      = locked;
+        this.lastIotUpdate = Instant.now();
     }
 
     // Getters for embedded value objects

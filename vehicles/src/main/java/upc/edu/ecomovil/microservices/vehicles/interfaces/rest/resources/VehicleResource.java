@@ -1,5 +1,7 @@
 package upc.edu.ecomovil.microservices.vehicles.interfaces.rest.resources;
 
+import java.time.Instant;
+
 public record VehicleResource(
         Long id,
         Long ownerId,
@@ -13,5 +15,10 @@ public record VehicleResource(
         String imageUrl,
         Float lat,
         Float lng,
-        String description) {
+        String description,
+        // IoT fields
+        String iotDeviceId,
+        Boolean isLocked,
+        Boolean fallDetected,
+        Instant lastIotUpdate) {
 }
