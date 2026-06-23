@@ -45,6 +45,8 @@ public class WebSecurityConfig {
                         .requestMatchers("/swagger-resources/**").permitAll()
                         .requestMatchers("/webjars/**").permitAll()
                         .requestMatchers("/api/v1/vehicles/chat").permitAll()
+                        // IoT bridge: called by Lambda, authenticated via X-IoT-Key header
+                        .requestMatchers("/api/v1/vehicles/*/iot-telemetry").permitAll()
 
                         // Admin-only endpoints
                         .requestMatchers("/api/v1/vehicles/admin/**").hasRole("ADMIN")

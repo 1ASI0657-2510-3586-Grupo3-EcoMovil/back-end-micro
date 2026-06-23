@@ -32,6 +32,7 @@ import upc.edu.ecomovil.microservices.vehicles.application.internal.outboundserv
 
 import upc.edu.ecomovil.microservices.vehicles.infrastructure.aws.S3Service;
 import upc.edu.ecomovil.microservices.vehicles.infrastructure.aws.BedrockChatService;
+import upc.edu.ecomovil.microservices.vehicles.infrastructure.aws.IoTCoreService;
 
 import java.io.IOException;
 import java.util.Comparator;
@@ -57,19 +58,22 @@ public class VehicleController {
     private final ExternalUserService externalUserService;
     private final S3Service s3Service;
     private final BedrockChatService bedrockChatService;
+    private final IoTCoreService iotCoreService;
 
     public VehicleController(VehicleQueryService vehicleQueryService,
             VehicleCommandService vehicleCommandService,
             VehicleRepository vehicleRepository,
             ExternalUserService externalUserService,
             S3Service s3Service,
-            BedrockChatService bedrockChatService) {
+            BedrockChatService bedrockChatService,
+            IoTCoreService iotCoreService) {
         this.vehicleQueryService = vehicleQueryService;
         this.vehicleCommandService = vehicleCommandService;
         this.vehicleRepository = vehicleRepository;
         this.externalUserService = externalUserService;
         this.s3Service = s3Service;
         this.bedrockChatService = bedrockChatService;
+        this.iotCoreService = iotCoreService;
     }
 
     /**
@@ -551,5 +555,113 @@ public class VehicleController {
                 + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
                         * Math.sin(dLng / 2) * Math.sin(dLng / 2);
         return r * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    // -----------------------------------------------------------------------
+    // IoT endpoints
+    // -----------------------------------------------------------------------
+
+    /**
+     * Receives telemetry pushed by the Lambda bridge (IoT Rule → Lambda → here).
+     * Not JWT-protected — authenticated via a shared secret header X-IoT-Key.
+     * POST /api/v1/vehicles/{vehicleId}/iot-telemetry
+     */
+    public record IoTTelemetryRequest(
+            String deviceId,
+            Float lat,
+            Float lng,
+            Boolean fallDetected,
+            Boolean isLocked) {}
+
+    @Operation(summary = "Receive IoT telemetry", description = "Internal endpoint called by Lambda bridge from AWS IoT Core")
+    @PutMapping("/{vehicleId}/iot-telemetry")
+    public ResponseEntity<Void> receiveIoTTelemetry(
+            @PathVariable Long vehicleId,
+            @RequestBody IoTTelemetryRequest body,
+            @RequestHeader(value = "X-IoT-Key", required = false) String iotKey) {
+
+        String expectedKey = System.getenv("IOT_KEY");
+        if (expectedKey != null && !expectedKey.equals(iotKey)) {
+            log.warn("IoT telemetry rejected: invalid X-IoT-Key for vehicle {}", vehicleId);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        var vehicleOpt = vehicleRepository.findById(vehicleId);
+        if (vehicleOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        Vehicle vehicle = vehicleOpt.get();
+        vehicle.updateIoTTelemetry(
+                body.deviceId(),
+                body.lat(),
+                body.lng(),
+                Boolean.TRUE.equals(body.fallDetected()),
+                Boolean.TRUE.equals(body.isLocked()));
+        vehicleRepository.save(vehicle);
+        log.info("IoT telemetry updated for vehicle {}: lat={} lng={} locked={} fall={}",
+                vehicleId, body.lat(), body.lng(), body.isLocked(), body.fallDetected());
+        return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Sends a LOCK command to the ESP32 via AWS IoT Core MQTT.
+     * POST /api/v1/vehicles/{vehicleId}/lock
+     */
+    @Operation(summary = "Lock vehicle", description = "Sends LOCK command to the IoT device attached to this vehicle")
+    @PostMapping("/{vehicleId}/lock")
+    public ResponseEntity<VehicleResource> lockVehicle(
+            @PathVariable Long vehicleId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        var vehicleOpt = vehicleRepository.findById(vehicleId);
+        if (vehicleOpt.isEmpty()) return ResponseEntity.notFound().build();
+
+        Vehicle vehicle = vehicleOpt.get();
+        Long userId = ((JwtUserDetails) userDetails).getUserId();
+        boolean isAdmin = userDetails.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+        if (!isAdmin && !vehicle.getOwnerId().equals(userId)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        if (vehicle.getIotDeviceId() == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        iotCoreService.sendCommand(vehicle.getIotDeviceId(), "LOCK");
+        vehicle.setLocked(true);
+        var saved = vehicleRepository.save(vehicle);
+        log.info("LOCK sent to device {} (vehicle {})", vehicle.getIotDeviceId(), vehicleId);
+        return ResponseEntity.ok(VehicleResourceFromEntityAssembler.toResourceFromEntity(saved));
+    }
+
+    /**
+     * Sends an UNLOCK command to the ESP32 via AWS IoT Core MQTT.
+     * POST /api/v1/vehicles/{vehicleId}/unlock
+     */
+    @Operation(summary = "Unlock vehicle", description = "Sends UNLOCK command to the IoT device attached to this vehicle")
+    @PostMapping("/{vehicleId}/unlock")
+    public ResponseEntity<VehicleResource> unlockVehicle(
+            @PathVariable Long vehicleId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        var vehicleOpt = vehicleRepository.findById(vehicleId);
+        if (vehicleOpt.isEmpty()) return ResponseEntity.notFound().build();
+
+        Vehicle vehicle = vehicleOpt.get();
+        Long userId = ((JwtUserDetails) userDetails).getUserId();
+        boolean isAdmin = userDetails.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+        if (!isAdmin && !vehicle.getOwnerId().equals(userId)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        if (vehicle.getIotDeviceId() == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        iotCoreService.sendCommand(vehicle.getIotDeviceId(), "UNLOCK");
+        vehicle.setLocked(false);
+        var saved = vehicleRepository.save(vehicle);
+        log.info("UNLOCK sent to device {} (vehicle {})", vehicle.getIotDeviceId(), vehicleId);
+        return ResponseEntity.ok(VehicleResourceFromEntityAssembler.toResourceFromEntity(saved));
     }
 }

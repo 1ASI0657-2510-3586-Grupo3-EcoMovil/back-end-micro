@@ -102,6 +102,11 @@
             <artifactId>secretsmanager</artifactId>
             <version>2.29.52</version>
         </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>iotdataplane</artifactId>
+            <version>2.29.52</version>
+        </dependency>
         <!-- Testing -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
