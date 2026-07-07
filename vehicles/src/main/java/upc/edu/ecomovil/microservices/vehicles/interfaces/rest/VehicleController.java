@@ -531,13 +531,18 @@ public class VehicleController {
                         .map(t -> new BedrockChatService.ChatTurn(t.role(), t.text()))
                         .toList();
 
-        String reply = bedrockChatService.chat(request.message(), ranked, request.userName(), history);
+        String rawReply = bedrockChatService.chat(request.message(), ranked, request.userName(), history);
 
-        // Only attach suggestion cards for vehicles the bot actually mentioned by
-        // id, so the UI doesn't show recommendations while the bot is still just
-        // asking clarifying questions.
+        // Extract vehicle IDs from hidden [vid:N] tags, then strip them from the
+        // user-visible reply so the user never sees "id=3" or "[vid:3]".
+        java.util.regex.Pattern vidPattern = java.util.regex.Pattern.compile("\\[vid:(\\d+)\\]");
+        java.util.regex.Matcher vidMatcher = vidPattern.matcher(rawReply);
+        java.util.Set<Long> mentionedIds = new java.util.HashSet<>();
+        while (vidMatcher.find()) mentionedIds.add(Long.parseLong(vidMatcher.group(1)));
+        String reply = rawReply.replaceAll("\\[vid:\\d+\\]", "").trim();
+
         var suggestions = ranked.stream()
-                .filter(v -> reply.contains("id=" + v.getId()))
+                .filter(v -> mentionedIds.contains(v.getId()))
                 .map(v -> new ChatSuggestion(v.getId(), v.getName(), v.getType(), v.getPriceSell(), v.getPriceRent(),
                         v.getImageUrl(), hasLocation ? distanceKm(request.lat(), request.lng(), v.getLat(), v.getLng()) : null))
                 .toList();

@@ -69,8 +69,10 @@ public class BedrockChatService {
                 + "sugieras nada en ese caso.\n"
                 + "REGLA 2: en cualquier otro caso, es decir si el usuario menciona un tipo de vehiculo, un "
                 + "presupuesto, o pide una recomendacion, responde INMEDIATAMENTE sugiriendo 1 vehiculo "
-                + "especifico de la lista (indica su id), el que mejor se ajuste a lo que pidio. No pidas mas "
-                + "detalles, la lista ya esta filtrada para que cualquier opcion sea valida.\n"
+                + "especifico de la lista, el que mejor se ajuste a lo que pidio. No pidas mas detalles, "
+                + "la lista ya esta filtrada. Al final de tu respuesta agrega EXACTAMENTE el tag [vid:N] "
+                + "donde N es el numero de id del vehiculo sugerido (ejemplo: [vid:3]). "
+                + "No escribas 'id=' en ninguna otra parte del texto.\n"
                 + "Se breve (maximo 60 palabras), en español.";
 
         // ponytail: no DB-backed session — frontend resends the last few turns each call.
