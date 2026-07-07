@@ -541,13 +541,28 @@ public class VehicleController {
         while (vidMatcher.find()) mentionedIds.add(Long.parseLong(vidMatcher.group(1)));
         String reply = rawReply.replaceAll("\\[vid:\\d+\\]", "").trim();
 
-        var suggestions = ranked.stream()
-                .filter(v -> mentionedIds.contains(v.getId()))
-                .map(v -> new ChatSuggestion(v.getId(), v.getName(), v.getType(), v.getPriceSell(), v.getPriceRent(),
-                        v.getImageUrl(), hasLocation ? distanceKm(request.lat(), request.lng(), v.getLat(), v.getLng()) : null))
-                .toList();
+        // Never show suggestion cards when the user only greeted — small models
+        // ignore conditional instructions and suggest anyway, so we gate here deterministically.
+        List<ChatSuggestion> suggestions;
+        if (isGreetingOnly(request.message())) {
+            suggestions = List.of();
+        } else {
+            suggestions = ranked.stream()
+                    .filter(v -> mentionedIds.contains(v.getId()))
+                    .map(v -> new ChatSuggestion(v.getId(), v.getName(), v.getType(), v.getPriceSell(), v.getPriceRent(),
+                            v.getImageUrl(), hasLocation ? distanceKm(request.lat(), request.lng(), v.getLat(), v.getLng()) : null))
+                    .toList();
+        }
 
         return ResponseEntity.ok(new ChatResponse(reply, suggestions));
+    }
+
+    private static final java.util.regex.Pattern GREETING_PATTERN = java.util.regex.Pattern.compile(
+            "^\\s*(hola|hi|hey|buenas|buenos\\s+d[ií]as|buenas\\s+tardes|buenas\\s+noches|saludos|ola|ey)[!?.\\s]*$",
+            java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.UNICODE_CASE);
+
+    private static boolean isGreetingOnly(String message) {
+        return message != null && GREETING_PATTERN.matcher(message.trim()).matches();
     }
 
     // ponytail: small in-memory dataset, plain Haversine beats adding a
