@@ -526,12 +526,17 @@ public class VehicleController {
                 .limit(3)
                 .toList();
 
+        // If the user asks for an alternative, skip the first candidate (already shown)
+        // so the model naturally picks a different one. Stateless: works for one "otra" level.
+        boolean wantsAlternative = isAlternativeRequest(request.message());
+        var candidates = wantsAlternative && ranked.size() > 1 ? ranked.subList(1, ranked.size()) : ranked;
+
         var history = request.history() == null ? null
                 : request.history().stream()
                         .map(t -> new BedrockChatService.ChatTurn(t.role(), t.text()))
                         .toList();
 
-        String rawReply = bedrockChatService.chat(request.message(), ranked, request.userName(), history);
+        String rawReply = bedrockChatService.chat(request.message(), candidates, request.userName(), history);
 
         // Extract vehicle IDs from hidden [vid:N] tags, then strip them from the
         // user-visible reply so the user never sees "id=3" or "[vid:3]".
@@ -563,6 +568,14 @@ public class VehicleController {
 
     private static boolean isGreetingOnly(String message) {
         return message != null && GREETING_PATTERN.matcher(message.trim()).matches();
+    }
+
+    private static final java.util.regex.Pattern ALTERNATIVE_PATTERN = java.util.regex.Pattern.compile(
+            ".*\\b(otra|otro|diferente|alternativa|cambio|cambia|siguiente|distinto|no ese|no me gusta|algo mas|algo más)\\b.*",
+            java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.UNICODE_CASE);
+
+    private static boolean isAlternativeRequest(String message) {
+        return message != null && ALTERNATIVE_PATTERN.matcher(message.trim()).matches();
     }
 
     // ponytail: small in-memory dataset, plain Haversine beats adding a
