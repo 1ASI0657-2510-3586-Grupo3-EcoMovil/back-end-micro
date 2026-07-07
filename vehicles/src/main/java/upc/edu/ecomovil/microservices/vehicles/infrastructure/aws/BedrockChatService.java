@@ -54,7 +54,7 @@ public class BedrockChatService {
     public String chat(String userMessage, List<Vehicle> candidates, String userName, List<ChatTurn> history) {
         String catalog = candidates.isEmpty() ? "No hay vehiculos disponibles ahora."
                 : candidates.stream()
-                        .map(v -> String.format("- id=%d, %s %s (%d), venta S/%.0f, renta S/%.0f/dia",
+                        .map(v -> String.format("- [vid:%d] %s %s (%d), venta S/%.0f, renta S/%.0f/dia",
                                 v.getId(), v.getType(), v.getName(), v.getYear(), v.getPriceSell(), v.getPriceRent()))
                         .reduce("", (a, b) -> a + b + "\n");
 
@@ -62,17 +62,18 @@ public class BedrockChatService {
 
         String system = "Eres el asistente de ventas de EcoMovil, un marketplace de vehiculos ecologicos "
                 + "(bicicletas, scooters, monopatines, rollskaters) para estudiantes en Lima." + greeting
-                + " Responde SOLO sobre los vehiculos de esta lista (ya filtrada por presupuesto si el usuario "
-                + "dio uno), nunca inventes otros: \n" + catalog
-                + "\nREGLA 1: si el usuario SOLO saluda (ej. \"hola\") sin decir nada mas, saludalo (por su "
-                + "nombre si lo tienes) y pregunta que tipo de vehiculo busca y cuanto quiere gastar. No "
-                + "sugieras nada en ese caso.\n"
-                + "REGLA 2: en cualquier otro caso, es decir si el usuario menciona un tipo de vehiculo, un "
-                + "presupuesto, o pide una recomendacion, responde INMEDIATAMENTE sugiriendo 1 vehiculo "
-                + "especifico de la lista, el que mejor se ajuste a lo que pidio. No pidas mas detalles, "
-                + "la lista ya esta filtrada. Al final de tu respuesta agrega EXACTAMENTE el tag [vid:N] "
-                + "donde N es el numero de id del vehiculo sugerido (ejemplo: [vid:3]). "
-                + "No escribas 'id=' en ninguna otra parte del texto.\n"
+                + " Responde SOLO sobre los vehiculos de esta lista (ya pre-filtrada), nunca inventes otros:\n"
+                + catalog
+                + "\nCada vehiculo en la lista tiene un tag [vid:N] al inicio. Cuando menciones o "
+                + "recomiendes un vehiculo, incluye EXACTAMENTE ese tag [vid:N] en tu respuesta. "
+                + "NUNCA escribas 'id=' ni ningun otro formato de identificador.\n"
+                + "REGLA 1: si el usuario SOLO saluda sin decir nada mas, saludalo (por su nombre si lo "
+                + "tienes) y pregunta que tipo de vehiculo busca. No sugieras nada en ese caso.\n"
+                + "REGLA 2: si el usuario menciona un tipo de vehiculo, un presupuesto, o pide una "
+                + "recomendacion, responde INMEDIATAMENTE sugiriendo 1 vehiculo de la lista. "
+                + "No pidas mas detalles.\n"
+                + "REGLA 3: si el usuario NO especifico presupuesto, recomienda SIEMPRE el vehiculo "
+                + "con el MENOR precio de venta de la lista — son estudiantes con presupuesto limitado.\n"
                 + "Se breve (maximo 60 palabras), en español.";
 
         // ponytail: no DB-backed session — frontend resends the last few turns each call.
