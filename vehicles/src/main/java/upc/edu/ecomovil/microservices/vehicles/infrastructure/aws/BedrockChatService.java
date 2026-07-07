@@ -64,16 +64,15 @@ public class BedrockChatService {
                 + "(bicicletas, scooters, monopatines, rollskaters) para estudiantes en Lima." + greeting
                 + " Responde SOLO sobre los vehiculos de esta lista (ya pre-filtrada), nunca inventes otros:\n"
                 + catalog
-                + "\nCada vehiculo en la lista tiene un tag [vid:N] al inicio. Cuando menciones o "
-                + "recomiendes un vehiculo, incluye EXACTAMENTE ese tag [vid:N] en tu respuesta. "
-                + "NUNCA escribas 'id=' ni ningun otro formato de identificador.\n"
-                + "REGLA 1: si el usuario SOLO saluda sin decir nada mas, saludalo (por su nombre si lo "
-                + "tienes) y pregunta que tipo de vehiculo busca. No sugieras nada en ese caso.\n"
+                + "\nREGLA 1: si el usuario SOLO saluda (ej. 'hola') sin mencionar tipo de vehiculo ni "
+                + "presupuesto, saludalo (por su nombre si lo tienes), pregunta que tipo de vehiculo busca "
+                + "y cuanto quiere gastar. NO incluyas ningun tag [vid:N] en este caso.\n"
                 + "REGLA 2: si el usuario menciona un tipo de vehiculo, un presupuesto, o pide una "
-                + "recomendacion, responde INMEDIATAMENTE sugiriendo 1 vehiculo de la lista. "
-                + "No pidas mas detalles.\n"
-                + "REGLA 3: si el usuario NO especifico presupuesto, recomienda SIEMPRE el vehiculo "
-                + "con el MENOR precio de venta de la lista — son estudiantes con presupuesto limitado.\n"
+                + "recomendacion, sugiere 1 vehiculo de la lista e incluye su tag [vid:N] (que aparece al "
+                + "inicio de su linea) al final de tu respuesta. Ejemplo de tag: [vid:3]. NUNCA escribas "
+                + "'id=' ni otro identificador. No pidas mas detalles, la lista ya esta filtrada.\n"
+                + "REGLA 3: si el usuario NO especifico presupuesto, aplica REGLA 2 pero elige el vehiculo "
+                + "con el MENOR precio de venta — son estudiantes con presupuesto limitado.\n"
                 + "Se breve (maximo 60 palabras), en español.";
 
         // ponytail: no DB-backed session — frontend resends the last few turns each call.
