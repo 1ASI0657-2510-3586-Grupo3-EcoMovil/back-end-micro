@@ -526,10 +526,18 @@ public class VehicleController {
                 .limit(3)
                 .toList();
 
-        // If the user asks for an alternative, skip the first candidate (already shown)
-        // so the model naturally picks a different one. Stateless: works for one "otra" level.
-        boolean wantsAlternative = isAlternativeRequest(request.message());
-        var candidates = wantsAlternative && ranked.size() > 1 ? ranked.subList(1, ranked.size()) : ranked;
+        // Greeting-only → pass empty catalog so the model text also stays clean (no vehicle names).
+        // Alternative request → skip candidate #1 so the model sees a different pool.
+        boolean greetingOnly = isGreetingOnly(request.message());
+        boolean wantsAlternative = !greetingOnly && isAlternativeRequest(request.message());
+        List<Vehicle> candidates;
+        if (greetingOnly) {
+            candidates = List.of();
+        } else if (wantsAlternative && ranked.size() > 1) {
+            candidates = ranked.subList(1, ranked.size());
+        } else {
+            candidates = ranked;
+        }
 
         var history = request.history() == null ? null
                 : request.history().stream()
@@ -539,25 +547,19 @@ public class VehicleController {
         String rawReply = bedrockChatService.chat(request.message(), candidates, request.userName(), history);
 
         // Extract vehicle IDs from hidden [vid:N] tags, then strip them from the
-        // user-visible reply so the user never sees "id=3" or "[vid:3]".
+        // user-visible reply so the user never sees "[vid:3]".
         java.util.regex.Pattern vidPattern = java.util.regex.Pattern.compile("\\[vid:(\\d+)\\]");
         java.util.regex.Matcher vidMatcher = vidPattern.matcher(rawReply);
         java.util.Set<Long> mentionedIds = new java.util.HashSet<>();
         while (vidMatcher.find()) mentionedIds.add(Long.parseLong(vidMatcher.group(1)));
         String reply = rawReply.replaceAll("\\[vid:\\d+\\]", "").trim();
 
-        // Never show suggestion cards when the user only greeted — small models
-        // ignore conditional instructions and suggest anyway, so we gate here deterministically.
         List<ChatSuggestion> suggestions;
-        if (isGreetingOnly(request.message())) {
-            suggestions = List.of();
-        } else {
-            suggestions = ranked.stream()
-                    .filter(v -> mentionedIds.contains(v.getId()))
-                    .map(v -> new ChatSuggestion(v.getId(), v.getName(), v.getType(), v.getPriceSell(), v.getPriceRent(),
-                            v.getImageUrl(), hasLocation ? distanceKm(request.lat(), request.lng(), v.getLat(), v.getLng()) : null))
-                    .toList();
-        }
+        suggestions = candidates.stream()
+                .filter(v -> mentionedIds.contains(v.getId()))
+                .map(v -> new ChatSuggestion(v.getId(), v.getName(), v.getType(), v.getPriceSell(), v.getPriceRent(),
+                        v.getImageUrl(), hasLocation ? distanceKm(request.lat(), request.lng(), v.getLat(), v.getLng()) : null))
+                .toList();
 
         return ResponseEntity.ok(new ChatResponse(reply, suggestions));
     }
