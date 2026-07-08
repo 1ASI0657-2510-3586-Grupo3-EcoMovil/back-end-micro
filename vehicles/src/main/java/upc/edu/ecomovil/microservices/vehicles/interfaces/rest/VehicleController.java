@@ -630,6 +630,8 @@ public class VehicleController {
             return ResponseEntity.notFound().build();
         }
         Vehicle vehicle = vehicleOpt.get();
+        boolean wasBreached = Boolean.TRUE.equals(vehicle.getGeofenceBreached());
+
         vehicle.updateIoTTelemetry(
                 body.deviceId(),
                 body.lat(),
@@ -639,9 +641,17 @@ public class VehicleController {
                 body.speedKmh(),
                 body.panicActive());
         vehicleRepository.save(vehicle);
+
+        boolean nowBreached = Boolean.TRUE.equals(vehicle.getGeofenceBreached());
+        if (!wasBreached && nowBreached && vehicle.getIotDeviceId() != null) {
+            iotCoreService.sendCommand(vehicle.getIotDeviceId(), "LOCK");
+            log.warn("Geofence breached for vehicle {} — LOCK sent to device {}",
+                    vehicleId, vehicle.getIotDeviceId());
+        }
+
         log.info("IoT telemetry updated for vehicle {}: lat={} lng={} locked={} fall={} speed={} panic={} geofenceBreached={}",
                 vehicleId, body.lat(), body.lng(), body.isLocked(), body.fallDetected(),
-                body.speedKmh(), body.panicActive(), vehicle.getGeofenceBreached());
+                body.speedKmh(), body.panicActive(), nowBreached);
         return ResponseEntity.ok().build();
     }
 
