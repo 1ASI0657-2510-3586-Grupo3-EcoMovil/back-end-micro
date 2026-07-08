@@ -20,6 +20,7 @@ import upc.edu.ecomovil.microservices.reservations.domain.model.queries.GetAllRe
 import upc.edu.ecomovil.microservices.reservations.domain.model.queries.GetReservationByIdQuery;
 import upc.edu.ecomovil.microservices.reservations.domain.services.ReservationCommandService;
 import upc.edu.ecomovil.microservices.reservations.domain.services.ReservationQueryService;
+import upc.edu.ecomovil.microservices.reservations.interfaces.rest.resources.AvailabilityPeriodResource;
 import upc.edu.ecomovil.microservices.reservations.interfaces.rest.resources.CreateReservationResource;
 import upc.edu.ecomovil.microservices.reservations.interfaces.rest.resources.ReservationResource;
 import upc.edu.ecomovil.microservices.reservations.interfaces.rest.transform.CreateReservationCommandFromResourceAssembler;
@@ -255,6 +256,36 @@ public class ReservationController {
             return ResponseEntity.ok(reservationResources);
         } catch (Exception e) {
             log.error("Error getting reservations for vehicle {}: {}", vehicleId, e.getMessage(), e);
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @Operation(summary = "Get booked date ranges for a vehicle", description = "Returns start/end date pairs for active reservations. Accessible by any authenticated user.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Availability periods returned"),
+            @ApiResponse(responseCode = "404", description = "Vehicle not found")
+    })
+    @GetMapping("/vehicle/{vehicleId}/availability")
+    public ResponseEntity<List<AvailabilityPeriodResource>> getVehicleAvailability(
+            @PathVariable Long vehicleId) {
+        try {
+            var vehicle = externalVehicleService.fetchVehicleById(vehicleId);
+            if (vehicle.isEmpty()) {
+                return ResponseEntity.notFound().build();
+            }
+
+            var query = new GetAllReservationsByVehicleIdQuery(vehicleId);
+            var reservations = reservationQueryService.handle(query);
+
+            var periods = reservations.stream()
+                    .filter(r -> !r.getStatus().equalsIgnoreCase("cancelled")
+                              && !r.getStatus().equalsIgnoreCase("deleted"))
+                    .map(r -> new AvailabilityPeriodResource(r.getStartDate(), r.getEndDate()))
+                    .collect(Collectors.toList());
+
+            return ResponseEntity.ok(periods);
+        } catch (Exception e) {
+            log.error("Error getting availability for vehicle {}: {}", vehicleId, e.getMessage(), e);
             return ResponseEntity.badRequest().build();
         }
     }
