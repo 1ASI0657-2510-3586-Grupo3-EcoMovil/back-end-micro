@@ -54,8 +54,27 @@ public class Vehicle extends AuditableAbstractAggregateRoot<Vehicle> {
     @Column(name = "fall_detected")
     private Boolean fallDetected = false;
 
+    @Column(name = "panic_active")
+    private Boolean panicActive = false;
+
+    @Column(name = "speed_kmh")
+    private Float speedKmh = 0f;
+
     @Column(name = "last_iot_update")
     private Instant lastIotUpdate;
+
+    // Geofence fields
+    @Column(name = "geofence_center_lat")
+    private Float geofenceCenterLat;
+
+    @Column(name = "geofence_center_lng")
+    private Float geofenceCenterLng;
+
+    @Column(name = "geofence_radius_m")
+    private Integer geofenceRadiusM;
+
+    @Column(name = "geofence_breached")
+    private Boolean geofenceBreached = false;
 
     public Vehicle(String type, String name, Integer year, Integer review, Double priceRent, Double priceSell,
             Boolean isAvailable, String imageUrl, Float lat, Float lng, String description, Long ownerId) {
@@ -113,20 +132,52 @@ public class Vehicle extends AuditableAbstractAggregateRoot<Vehicle> {
     }
 
     public void updateIoTTelemetry(String iotDeviceId, Float lat, Float lng,
-                                   Boolean fallDetected, Boolean isLocked) {
+                                   Boolean fallDetected, Boolean isLocked,
+                                   Float speedKmh, Boolean panicActive) {
         this.iotDeviceId   = iotDeviceId;
         if (lat != null && lng != null) {
             this.lat = lat;
             this.lng = lng;
+            this.geofenceBreached = computeGeofenceBreach(lat, lng);
         }
         this.fallDetected  = fallDetected;
         this.isLocked      = isLocked;
+        this.speedKmh      = speedKmh != null ? speedKmh : 0f;
+        if (Boolean.TRUE.equals(panicActive)) this.panicActive = true;
         this.lastIotUpdate = Instant.now();
+    }
+
+    public void setGeofence(Float centerLat, Float centerLng, Integer radiusM) {
+        this.geofenceCenterLat = centerLat;
+        this.geofenceCenterLng = centerLng;
+        this.geofenceRadiusM   = radiusM;
+        if (this.lat != null && this.lng != null) {
+            this.geofenceBreached = computeGeofenceBreach(this.lat, this.lng);
+        }
+    }
+
+    public void resetAlerts() {
+        this.fallDetected   = false;
+        this.panicActive    = false;
+        this.geofenceBreached = false;
     }
 
     public void setLocked(Boolean locked) {
         this.isLocked      = locked;
+        if (!Boolean.TRUE.equals(locked)) resetAlerts();
         this.lastIotUpdate = Instant.now();
+    }
+
+    private boolean computeGeofenceBreach(float lat, float lng) {
+        if (geofenceCenterLat == null || geofenceCenterLng == null || geofenceRadiusM == null) return false;
+        double R = 6371000.0;
+        double dLat = Math.toRadians(lat - geofenceCenterLat);
+        double dLng = Math.toRadians(lng - geofenceCenterLng);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+                 + Math.cos(Math.toRadians(geofenceCenterLat)) * Math.cos(Math.toRadians(lat))
+                   * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        double dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return dist > geofenceRadiusM;
     }
 
     // Getters for embedded value objects

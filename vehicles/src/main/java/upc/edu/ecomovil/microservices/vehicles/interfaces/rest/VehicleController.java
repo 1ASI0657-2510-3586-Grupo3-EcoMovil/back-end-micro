@@ -606,7 +606,11 @@ public class VehicleController {
             Float lat,
             Float lng,
             Boolean fallDetected,
-            Boolean isLocked) {}
+            Boolean isLocked,
+            Float speedKmh,
+            Boolean panicActive) {}
+
+    public record GeofenceRequest(Float centerLat, Float centerLng, Integer radiusM) {}
 
     @Operation(summary = "Receive IoT telemetry", description = "Internal endpoint called by Lambda bridge from AWS IoT Core")
     @PutMapping("/{vehicleId}/iot-telemetry")
@@ -631,11 +635,39 @@ public class VehicleController {
                 body.lat(),
                 body.lng(),
                 Boolean.TRUE.equals(body.fallDetected()),
-                Boolean.TRUE.equals(body.isLocked()));
+                Boolean.TRUE.equals(body.isLocked()),
+                body.speedKmh(),
+                body.panicActive());
         vehicleRepository.save(vehicle);
-        log.info("IoT telemetry updated for vehicle {}: lat={} lng={} locked={} fall={}",
-                vehicleId, body.lat(), body.lng(), body.isLocked(), body.fallDetected());
+        log.info("IoT telemetry updated for vehicle {}: lat={} lng={} locked={} fall={} speed={} panic={} geofenceBreached={}",
+                vehicleId, body.lat(), body.lng(), body.isLocked(), body.fallDetected(),
+                body.speedKmh(), body.panicActive(), vehicle.getGeofenceBreached());
         return ResponseEntity.ok().build();
+    }
+
+    @Operation(summary = "Set geofence for vehicle", description = "Saves the owner-defined geofence center and radius")
+    @PutMapping("/{vehicleId}/geofence")
+    public ResponseEntity<VehicleResource> setGeofence(
+            @PathVariable Long vehicleId,
+            @RequestBody GeofenceRequest body,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        var vehicleOpt = vehicleRepository.findById(vehicleId);
+        if (vehicleOpt.isEmpty()) return ResponseEntity.notFound().build();
+
+        Vehicle vehicle = vehicleOpt.get();
+        Long userId = ((JwtUserDetails) userDetails).getUserId();
+        boolean isAdmin = userDetails.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+        if (!isAdmin && !vehicle.getOwnerId().equals(userId)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        vehicle.setGeofence(body.centerLat(), body.centerLng(), body.radiusM());
+        var saved = vehicleRepository.save(vehicle);
+        log.info("Geofence set for vehicle {}: center=({},{}) radius={}m",
+                vehicleId, body.centerLat(), body.centerLng(), body.radiusM());
+        return ResponseEntity.ok(VehicleResourceFromEntityAssembler.toResourceFromEntity(saved));
     }
 
     /**
@@ -694,7 +726,7 @@ public class VehicleController {
         }
 
         iotCoreService.sendCommand(vehicle.getIotDeviceId(), "UNLOCK");
-        vehicle.setLocked(false);
+        vehicle.setLocked(false); // also resets fallDetected + panicActive + geofenceBreached
         var saved = vehicleRepository.save(vehicle);
         log.info("UNLOCK sent to device {} (vehicle {})", vehicle.getIotDeviceId(), vehicleId);
         return ResponseEntity.ok(VehicleResourceFromEntityAssembler.toResourceFromEntity(saved));

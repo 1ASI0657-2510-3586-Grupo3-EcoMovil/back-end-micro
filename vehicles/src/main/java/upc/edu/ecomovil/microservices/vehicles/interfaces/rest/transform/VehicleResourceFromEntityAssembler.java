@@ -23,6 +23,12 @@ public class VehicleResourceFromEntityAssembler {
                 entity.getIotDeviceId(),
                 entity.getIsLocked(),
                 entity.getFallDetected(),
-                entity.getLastIotUpdate());
+                entity.getPanicActive(),
+                entity.getSpeedKmh(),
+                entity.getLastIotUpdate(),
+                entity.getGeofenceCenterLat(),
+                entity.getGeofenceCenterLng(),
+                entity.getGeofenceRadiusM(),
+                entity.getGeofenceBreached());
     }
 }

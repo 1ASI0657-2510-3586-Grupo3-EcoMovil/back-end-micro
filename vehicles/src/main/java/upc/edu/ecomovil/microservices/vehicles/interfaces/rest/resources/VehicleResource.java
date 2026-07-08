@@ -20,5 +20,12 @@ public record VehicleResource(
         String iotDeviceId,
         Boolean isLocked,
         Boolean fallDetected,
-        Instant lastIotUpdate) {
+        Boolean panicActive,
+        Float speedKmh,
+        Instant lastIotUpdate,
+        // Geofence
+        Float geofenceCenterLat,
+        Float geofenceCenterLng,
+        Integer geofenceRadiusM,
+        Boolean geofenceBreached) {
 }
