@@ -33,6 +33,8 @@ import upc.edu.ecomovil.microservices.vehicles.application.internal.outboundserv
 import upc.edu.ecomovil.microservices.vehicles.infrastructure.aws.S3Service;
 import upc.edu.ecomovil.microservices.vehicles.infrastructure.aws.BedrockChatService;
 import upc.edu.ecomovil.microservices.vehicles.infrastructure.aws.IoTCoreService;
+import upc.edu.ecomovil.microservices.vehicles.infrastructure.aws.TelemetryHistoryService;
+import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 
 import java.io.IOException;
 import java.util.Comparator;
@@ -59,6 +61,7 @@ public class VehicleController {
     private final S3Service s3Service;
     private final BedrockChatService bedrockChatService;
     private final IoTCoreService iotCoreService;
+    private final TelemetryHistoryService telemetryHistoryService;
 
     public VehicleController(VehicleQueryService vehicleQueryService,
             VehicleCommandService vehicleCommandService,
@@ -66,7 +69,8 @@ public class VehicleController {
             ExternalUserService externalUserService,
             S3Service s3Service,
             BedrockChatService bedrockChatService,
-            IoTCoreService iotCoreService) {
+            IoTCoreService iotCoreService,
+            TelemetryHistoryService telemetryHistoryService) {
         this.vehicleQueryService = vehicleQueryService;
         this.vehicleCommandService = vehicleCommandService;
         this.vehicleRepository = vehicleRepository;
@@ -74,6 +78,7 @@ public class VehicleController {
         this.s3Service = s3Service;
         this.bedrockChatService = bedrockChatService;
         this.iotCoreService = iotCoreService;
+        this.telemetryHistoryService = telemetryHistoryService;
     }
 
     /**
@@ -743,5 +748,30 @@ public class VehicleController {
         var saved = vehicleRepository.save(vehicle);
         log.info("UNLOCK sent to device {} (vehicle {})", vehicle.getIotDeviceId(), vehicleId);
         return ResponseEntity.ok(VehicleResourceFromEntityAssembler.toResourceFromEntity(saved));
+    }
+
+    /**
+     * GET /api/v1/vehicles/{vehicleId}/telemetry/history?limit=200
+     * Returns the last N telemetry readings from DynamoDB (newest first).
+     * Each item: { ts, lat, lng, speed_kmh, is_locked, fall_detected, panic_active }
+     */
+    @GetMapping("/{vehicleId}/telemetry/history")
+    public ResponseEntity<List<Map<String, Object>>> getTelemetryHistory(
+            @PathVariable Long vehicleId,
+            @RequestParam(defaultValue = "200") int limit) {
+
+        var items = telemetryHistoryService.getHistory(vehicleId, Math.min(limit, 500));
+        var result = items.stream()
+                .map(item -> {
+                    Map<String, Object> row = new java.util.LinkedHashMap<>();
+                    item.forEach((k, v) -> {
+                        if (v.n() != null)      row.put(k, Double.parseDouble(v.n()));
+                        else if (v.bool() != null) row.put(k, v.bool());
+                        else if (v.s() != null) row.put(k, v.s());
+                    });
+                    return row;
+                })
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(result);
     }
 }
