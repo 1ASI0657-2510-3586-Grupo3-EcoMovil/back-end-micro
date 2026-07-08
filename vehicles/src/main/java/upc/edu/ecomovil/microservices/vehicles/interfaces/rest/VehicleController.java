@@ -697,7 +697,9 @@ public class VehicleController {
         Long userId = ((JwtUserDetails) userDetails).getUserId();
         boolean isAdmin = userDetails.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
-        if (!isAdmin && !vehicle.getOwnerId().equals(userId)) {
+        // Allow if admin, if vehicle has no owner yet (legacy data), or if requester is the owner
+        boolean ownerMismatch = vehicle.getOwnerId() != null && !vehicle.getOwnerId().equals(userId);
+        if (!isAdmin && ownerMismatch) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
         if (vehicle.getIotDeviceId() == null) {
@@ -728,7 +730,8 @@ public class VehicleController {
         Long userId = ((JwtUserDetails) userDetails).getUserId();
         boolean isAdmin = userDetails.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
-        if (!isAdmin && !vehicle.getOwnerId().equals(userId)) {
+        boolean ownerMismatch = vehicle.getOwnerId() != null && !vehicle.getOwnerId().equals(userId);
+        if (!isAdmin && ownerMismatch) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
         if (vehicle.getIotDeviceId() == null) {
