@@ -38,6 +38,30 @@ public class IoTCoreService {
         log.info("IoT command sent: topic={} payload={}", topic, payload);
     }
 
+    /**
+     * Sends geofence parameters to the device so it can run Haversine locally (edge).
+     * The ESP32 will beep immediately when it detects a breach without waiting for a server round-trip.
+     * Topic: ecomovil/commands/{deviceId}
+     */
+    public void sendGeofenceCommand(String deviceId, Double lat, Double lng, Double radiusM) {
+        String topic = "ecomovil/commands/" + deviceId;
+        String payload = String.format(
+                "{\"command\":\"GEOFENCE\",\"enabled\":true,\"lat\":%f,\"lng\":%f,\"radius_m\":%f}",
+                lat, lng, radiusM);
+        publish(topic, payload);
+        log.info("IoT geofence pushed to device {}: lat={} lng={} radius={}m", deviceId, lat, lng, radiusM);
+    }
+
+    /**
+     * Disables the geofence on the device (e.g. when owner clears the geofence).
+     */
+    public void clearGeofenceCommand(String deviceId) {
+        String topic   = "ecomovil/commands/" + deviceId;
+        String payload = "{\"command\":\"GEOFENCE\",\"enabled\":false,\"lat\":0,\"lng\":0,\"radius_m\":0}";
+        publish(topic, payload);
+        log.info("IoT geofence cleared on device {}", deviceId);
+    }
+
     private void publish(String topic, String payload) {
         try {
             iotClient.publish(PublishRequest.builder()

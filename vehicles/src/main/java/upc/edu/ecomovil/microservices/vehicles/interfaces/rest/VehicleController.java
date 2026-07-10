@@ -682,6 +682,21 @@ public class VehicleController {
         var saved = vehicleRepository.save(vehicle);
         log.info("Geofence set for vehicle {}: center=({},{}) radius={}m",
                 vehicleId, body.centerLat(), body.centerLng(), body.radiusM());
+
+        // Push geofence to the ESP32 so it runs edge Haversine and beeps locally on breach
+        if (vehicle.getIotDeviceId() != null && body.centerLat() != null
+                && body.centerLng() != null && body.radiusM() != null && body.radiusM() > 0) {
+            try {
+                iotCoreService.sendGeofenceCommand(
+                        vehicle.getIotDeviceId(),
+                        body.centerLat().doubleValue(),
+                        body.centerLng().doubleValue(),
+                        body.radiusM().doubleValue());
+            } catch (Exception e) {
+                log.warn("Could not push geofence to device {}: {}", vehicle.getIotDeviceId(), e.getMessage());
+            }
+        }
+
         return ResponseEntity.ok(VehicleResourceFromEntityAssembler.toResourceFromEntity(saved));
     }
 
