@@ -780,9 +780,13 @@ public class VehicleController {
                 .map(item -> {
                     Map<String, Object> row = new java.util.LinkedHashMap<>();
                     item.forEach((k, v) -> {
-                        if (v.n() != null)      row.put(k, Double.parseDouble(v.n()));
+                        if (v.n() != null)         row.put(k, Double.parseDouble(v.n()));
                         else if (v.bool() != null) row.put(k, v.bool());
-                        else if (v.s() != null) row.put(k, v.s());
+                        else if (v.s() != null) {
+                            // lat/lng/speed stored as strings by some producers — parse to number
+                            try { row.put(k, Double.parseDouble(v.s())); }
+                            catch (NumberFormatException e) { row.put(k, v.s()); }
+                        }
                     });
                     return row;
                 })
