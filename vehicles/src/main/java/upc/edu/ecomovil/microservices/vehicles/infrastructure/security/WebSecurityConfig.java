@@ -47,8 +47,8 @@ public class WebSecurityConfig {
                         .requestMatchers("/api/v1/vehicles/chat").permitAll()
                         // IoT bridge: called by Lambda, authenticated via X-IoT-Key header
                         .requestMatchers("/api/v1/vehicles/*/iot-telemetry").permitAll()
-                        // Telemetry history: read-only, accessible to authenticated users via frontend
-                        .requestMatchers("/api/v1/vehicles/*/telemetry/history").permitAll()
+                        // Telemetry history: requires authentication (owner/renter only)
+                        .requestMatchers("/api/v1/vehicles/*/telemetry/history").hasAnyRole("USER", "ADMIN")
 
                         // Admin-only endpoints
                         .requestMatchers("/api/v1/vehicles/admin/**").hasRole("ADMIN")
@@ -72,7 +72,8 @@ public class WebSecurityConfig {
         configuration.setAllowedOriginPatterns(List.of("*"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(List.of("*"));
-        configuration.setAllowCredentials(true);
+        // JWT is carried in Authorization header, not cookies — credentials flag not needed
+        // configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);

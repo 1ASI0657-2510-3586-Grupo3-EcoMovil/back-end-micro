@@ -40,6 +40,7 @@ import java.io.IOException;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -202,7 +203,7 @@ public class VehicleController {
         boolean isAdmin = userDetails.getAuthorities().stream()
                 .anyMatch(authority -> authority.getAuthority().equals("ROLE_ADMIN"));
 
-        if (!isAdmin && !vehicle.get().getOwnerId().equals(userId)) {
+        if (!isAdmin && !Objects.equals(vehicle.get().getOwnerId(), userId)) {
             log.warn("User {} attempted to access vehicle {} owned by {}", userId, vehicleId,
                     vehicle.get().getOwnerId());
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
@@ -355,73 +356,6 @@ public class VehicleController {
     }
 
     /**
-     * Test endpoint to verify JWT integration and user validation
-     */
-    @Operation(summary = "Test JWT integration", description = "Verifies that JWT authentication works and user profile can be retrieved")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Integration working correctly"),
-            @ApiResponse(responseCode = "401", description = "Unauthorized - Invalid JWT token"),
-            @ApiResponse(responseCode = "404", description = "User profile not found")
-    })
-    @GetMapping("/test-integration")
-    public ResponseEntity<String> testIntegration(@AuthenticationPrincipal UserDetails userDetails) {
-        try {
-            String username = userDetails.getUsername();
-            Long userId = ((JwtUserDetails) userDetails).getUserId();
-
-            log.info("JWT Integration Test - Username: {}, UserId: {}", username, userId);
-
-            return ResponseEntity.ok(String.format(
-                    "✅ JWT Integration Working!\n" +
-                            "Username: %s\n" +
-                            "User ID: %d\n" +
-                            "Authorities: %s\n" +
-                            "Vehicles Service is ready to create vehicles!",
-                    username, userId, userDetails.getAuthorities()));
-
-        } catch (Exception e) {
-            log.error("JWT Integration Test failed: {}", e.getMessage(), e);
-            return ResponseEntity.internalServerError()
-                    .body("❌ JWT Integration Failed: " + e.getMessage());
-        }
-    }
-
-    /**
-     * Test endpoint to verify communication with Users service
-     */
-    @Operation(summary = "Test Users service integration", description = "Verifies communication with Users microservice")
-    @GetMapping("/test-users-integration")
-    public ResponseEntity<String> testUsersIntegration(@AuthenticationPrincipal UserDetails userDetails) {
-        try {
-            Long userId = ((JwtUserDetails) userDetails).getUserId();
-            log.info("Testing Users service integration for userId: {}", userId);
-
-            var userProfile = externalUserService.fetchUserProfileById(userId);
-
-            if (userProfile.isPresent()) {
-                var profile = userProfile.get();
-                return ResponseEntity.ok(String.format(
-                        "✅ Users Service Integration Working!\n" +
-                                "Profile ID: %d\n" +
-                                "Name: %s %s\n" +
-                                "Email: %s\n" +
-                                "Plan ID: %d\n" +
-                                "Communication with Users service is successful!",
-                        profile.getId(), profile.getFirstName(), profile.getLastName(),
-                        profile.getEmail(), profile.getPlanId()));
-            } else {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body("❌ User profile not found in Users service for ID: " + userId);
-            }
-
-        } catch (Exception e) {
-            log.error("Users service integration test failed: {}", e.getMessage(), e);
-            return ResponseEntity.internalServerError()
-                    .body("❌ Users Service Integration Failed: " + e.getMessage());
-        }
-    }
-
-    /**
      * Upload a vehicle image to S3
      */
     @Operation(summary = "Upload vehicle image", description = "Uploads an image file to S3 and returns its URL")
@@ -511,9 +445,7 @@ public class VehicleController {
     @Operation(summary = "Chat with the sales bot", description = "Suggests nearby available vehicles via Bedrock")
     @PostMapping("/chat")
     public ResponseEntity<ChatResponse> chat(@RequestBody ChatRequest request) {
-        var available = vehicleRepository.findAll().stream()
-                .filter(v -> Boolean.TRUE.equals(v.getIsAvailable()))
-                .toList();
+        var available = vehicleRepository.findAllByIsAvailable(true);
 
         String pastMessages = request.history() == null ? ""
                 : request.history().stream().map(ChatHistoryTurn::text).reduce("", (a, b) -> a + " " + b);
@@ -625,8 +557,8 @@ public class VehicleController {
             @RequestHeader(value = "X-IoT-Key", required = false) String iotKey) {
 
         String expectedKey = System.getenv("IOT_KEY");
-        if (expectedKey != null && !expectedKey.equals(iotKey)) {
-            log.warn("IoT telemetry rejected: invalid X-IoT-Key for vehicle {}", vehicleId);
+        if (expectedKey == null || !expectedKey.equals(iotKey)) {
+            log.warn("IoT telemetry rejected: invalid or missing X-IoT-Key for vehicle {}", vehicleId);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
@@ -674,7 +606,7 @@ public class VehicleController {
         Long userId = ((JwtUserDetails) userDetails).getUserId();
         boolean isAdmin = userDetails.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
-        if (!isAdmin && !vehicle.getOwnerId().equals(userId)) {
+        if (!isAdmin && !Objects.equals(vehicle.getOwnerId(), userId)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
 
@@ -726,7 +658,12 @@ public class VehicleController {
             return ResponseEntity.badRequest().build();
         }
 
-        iotCoreService.sendCommand(vehicle.getIotDeviceId(), "LOCK");
+        try {
+            iotCoreService.sendCommand(vehicle.getIotDeviceId(), "LOCK");
+        } catch (Exception e) {
+            log.error("IoT LOCK command failed for vehicle {}: {}", vehicleId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build();
+        }
         vehicle.setLocked(true);
         var saved = vehicleRepository.save(vehicle);
         log.info("LOCK sent to device {} (vehicle {})", vehicle.getIotDeviceId(), vehicleId);
@@ -758,7 +695,12 @@ public class VehicleController {
             return ResponseEntity.badRequest().build();
         }
 
-        iotCoreService.sendCommand(vehicle.getIotDeviceId(), "UNLOCK");
+        try {
+            iotCoreService.sendCommand(vehicle.getIotDeviceId(), "UNLOCK");
+        } catch (Exception e) {
+            log.error("IoT UNLOCK command failed for vehicle {}: {}", vehicleId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build();
+        }
         vehicle.setLocked(false); // also resets fallDetected + panicActive + geofenceBreached
         var saved = vehicleRepository.save(vehicle);
         log.info("UNLOCK sent to device {} (vehicle {})", vehicle.getIotDeviceId(), vehicleId);
